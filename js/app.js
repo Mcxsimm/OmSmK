@@ -15,33 +15,15 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const num = v => {
-  if (v === null || v === undefined || v === '') return 0;
-  if (typeof v === 'number') return isFinite(v) ? v : 0;
-  const n = parseFloat(String(v).replace(/\s/g, '').replace(',', '.'));
-  return isFinite(n) ? n : 0;
-};
 const fmt = (n, d = 1) => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmtE = n => Number(n || 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 const pc = n => Math.round((n || 0) * 100) + ' %';
 const signe = (n, d = 1) => (n > 0.0001 ? '+' : '') + fmt(n, d);
 const signeE = n => (n > 0.5 ? '+' : '') + fmtE(n);
 const cls = n => n > 0.0001 ? 'pos' : (n < -0.0001 ? 'neg' : '');
-const estFait = v => v === true || ['vrai', 'true', '1', 'oui', 'x', 'ok', 'fait'].includes(String(v ?? '').toLowerCase().trim());
-const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
-function isoLocal(d) { return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
-function aujourdHui() { return isoLocal(new Date()); }
-function addDays(s, n) { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + n); return isoLocal(d); }
-function lundi(s) { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return isoLocal(d); }
 function fmtDate(s) { return s ? new Date(s + 'T00:00:00').toLocaleDateString('fr-FR') : ''; }
-function semISO(s) {
-  const d = new Date(s + 'T00:00:00');
-  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
-  const w1 = new Date(d.getFullYear(), 0, 4);
-  return 1 + Math.round(((d - w1) / 86400000 - 3 + ((w1.getDay() + 6) % 7)) / 7);
-}
-function lireJSON(k, def) { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? def; } catch (e) { return def; } }
+function lireJSON(k, def) { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? def; } catch (_e) { return def; } }
 
 function toast(msg) {
   const t = $('#toast');
@@ -69,77 +51,25 @@ function chargerDB() {
 }
 let db = chargerDB();
 let user = lireJSON(USER_KEY, null);
-let ui = Object.assign({
+const ui = Object.assign({
   view: 'tableau', chantierId: null, zone: null, terrainMode: 'liste', filtreTache: '',
   qualiteTab: 'reserves', reserveFiltre: 'ouvertes', semaine: null, equipe: 2
 }, lireJSON(UI_KEY, {}));
 if (!ui.semaine) ui.semaine = lundi(aujourdHui());
 
 function save() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(db)); }
-  catch (e) { toast('⚠️ Stockage local plein : exportez une sauvegarde puis faites du ménage.'); }
+  enregistrerLocal();
+  Synchro.planifier();
 }
-function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch (e) { /* ignoré */ } }
+function enregistrerLocal() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(db)); }
+  catch (_e) { toast('⚠️ Stockage local plein : exportez une sauvegarde puis faites du ménage.'); }
+}
+function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch (_e) { /* ignoré */ } }
 
 const ch = () => db.chantiers.find(c => c.id === ui.chantierId) || null;
 const deCh = (arr, cid = ui.chantierId) => arr.filter(x => x.chantierId === cid);
 const nomUser = () => user ? `${user.prenom || ''} ${user.nom || ''}`.trim() : '';
-const hjDe = c => num(c && c.heuresJour) || REF.heuresJourDefaut;
-
-/* =========================== Calculs métier ============================== */
-// Heures budgétées d'une opération : métré / cadence (u/j/homme) x heures par jour, sinon forfait
-function heuresOp(op, c) {
-  if (num(op.cadence) > 0 && num(op.metre) > 0) return num(op.metre) / num(op.cadence) * hjDe(c);
-  return num(op.heuresForfait);
-}
-
-// Couples ouvrage / phase issus du BTE, dans l'ordre d'apparition, avec heures budgétées
-function phasesBTE(cid) {
-  const c = db.chantiers.find(x => x.id === cid);
-  const map = new Map();
-  deCh(db.ops, cid).forEach(op => {
-    const k = op.ouvrage + '||' + op.phase;
-    if (!map.has(k)) map.set(k, { ouvrage: op.ouvrage, phase: op.phase, budget: 0, metreMax: 0, unite: '' });
-    const p = map.get(k);
-    p.budget += heuresOp(op, c);
-    if (num(op.metre) > p.metreMax) { p.metreMax = num(op.metre); p.unite = op.unite; }
-  });
-  return [...map.values()];
-}
-
-/* Indicateurs du fichier de suivi standard SMAC (Étape 2) :
-   écart h à date  = heures budgétées x % réalisé - heures pointées (si heures pointées > 0)
-   impact €        = écart h x taux horaire
-   écart projeté   = écart h / % réalisé            (extrapolation à 100 %) */
-function calcSuivi(cid, jusqua) {
-  const c = db.chantiers.find(x => x.id === cid);
-  const taux = num(c && c.tauxHoraire);
-  const entrees = deCh(db.suivi, cid).filter(s => !jusqua || s.semaine <= jusqua).sort((a, b) => a.semaine.localeCompare(b.semaine));
-  const rows = phasesBTE(cid).map(p => {
-    const es = entrees.filter(s => s.ouvrage === p.ouvrage && s.phase === p.phase);
-    let pct = 0;
-    es.forEach(s => { if (s.pct !== null && s.pct !== undefined && s.pct !== '') pct = num(s.pct); });
-    const heures = es.reduce((t, s) => t + num(s.heures), 0);
-    const ecartH = heures === 0 ? 0 : p.budget * pct - heures;
-    const ecartProj = pct > 0 ? ecartH / pct : 0;
-    return Object.assign({}, p, { pct, heures, gagnees: p.budget * pct, ecartH, impact: ecartH * taux, ecartProj, impactProj: ecartProj * taux });
-  });
-  const tot = rows.reduce((t, r) => {
-    t.budget += r.budget; t.heures += r.heures; t.gagnees += r.gagnees; t.ecartH += r.ecartH;
-    t.impact += r.impact; t.ecartProj += r.ecartProj; t.impactProj += r.impactProj; return t;
-  }, { budget: 0, heures: 0, gagnees: 0, ecartH: 0, impact: 0, ecartProj: 0, impactProj: 0 });
-  tot.pct = tot.budget > 0 ? tot.gagnees / tot.budget : 0;
-  // Comme le fichier SMAC : projection globale = écart total / avancement global
-  tot.ecartProj = tot.pct > 0 ? tot.ecartH / tot.pct : 0;
-  tot.impactProj = tot.ecartProj * taux;
-  return { rows, tot, taux };
-}
-
-function statsTerrain(cid) {
-  const t = deCh(db.taches, cid);
-  const faites = t.filter(x => estFait(x.fait)).length;
-  return { total: t.length, faites, pct: t.length ? faites / t.length : 0 };
-}
 
 function zonesDe(cid) { return [...new Set(deCh(db.taches, cid).map(t => t.zone))].filter(Boolean); }
 
@@ -173,6 +103,16 @@ function renderHeader() {
   $('#userChip').textContent = '👤 ' + (ini.toUpperCase() || '?');
   $('#netDot').classList.toggle('off', !navigator.onLine);
   $('#netDot').title = navigator.onLine ? 'En ligne' : 'Hors-ligne : tout est enregistré sur l\'appareil';
+  const b = $('#syncBtn');
+  const etats = {
+    off: ['☁️', 'Synchronisation en ligne désactivée'],
+    ok: ['☁️✓', 'Synchronisé' + (Synchro.derniere ? ' à ' + Synchro.derniere.toLocaleTimeString('fr-FR') : '')],
+    encours: ['☁️⟳', 'Synchronisation en cours…'],
+    erreur: ['☁️⚠', 'Erreur de synchronisation : ' + Synchro.erreur]
+  };
+  const [txt, titre] = Synchro.connecte() ? (navigator.onLine ? etats[Synchro.etat] || etats.ok : ['☁️⏸', 'Hors-ligne : synchronisation au retour du réseau']) : etats.off;
+  b.textContent = txt; b.title = titre;
+  b.classList.toggle('sync-err', Synchro.connecte() && Synchro.etat === 'erreur');
 }
 
 function vAccueil() {
@@ -214,8 +154,8 @@ function alertes(c, s) {
 }
 
 function vTableau(c) {
-  const s = calcSuivi(c.id);
-  const t = statsTerrain(c.id);
+  const s = calcSuivi(db, c.id);
+  const t = statsTerrain(db, c.id);
   const res = deCh(db.reserves);
   const ouvertes = res.filter(r => r.statut !== 'levée').length;
   const jIntemp = deCh(db.journal).filter(j => j.intemperie).length;
@@ -280,7 +220,7 @@ function vTerrain(c) {
   }
   const zones = zonesDe(c.id);
   if (!zones.includes(ui.zone)) ui.zone = zones[0];
-  const st = statsTerrain(c.id);
+  const st = statsTerrain(db, c.id);
   const mode = ui.terrainMode;
 
   const entete = `
@@ -332,7 +272,7 @@ function renderListeTaches() {
   const toutes = deCh(db.taches).filter(t => t.zone === ui.zone);
   const visibles = toutes.filter(t => !f || norm(t.tache).includes(f) || norm(t.lot).includes(f));
   const faites = toutes.filter(t => estFait(t.fait)).length;
-  const st = statsTerrain(ui.chantierId);
+  const st = statsTerrain(db, ui.chantierId);
   if ($('#terrainBadge')) $('#terrainBadge').textContent = `${st.faites}/${st.total} · ${pc(st.pct)}`;
   const badge = $('#zoneBadge');
   if (badge) {
@@ -355,7 +295,7 @@ function renderListeTaches() {
   }).join('') : '<div class="card empty">Aucune tâche ne correspond.</div>';
 }
 
-function vMatrice(c, zones) {
+function vMatrice(_c, zones) {
   const taches = deCh(db.taches);
   const cols = [...new Set(taches.map(t => t.tache))];
   const idx = new Map(taches.map(t => [t.zone + '||' + t.tache, t]));
@@ -381,15 +321,15 @@ function vMatrice(c, zones) {
 
 /* ------------------------------ Suivi hebdo ------------------------------ */
 function vSuivi(c) {
-  const phases = phasesBTE(c.id);
+  const phases = phasesBTE(db, c.id);
   if (!phases.length) {
     return `<div class="card"><div class="empty"><span class="big">📈</span>Le suivi hebdomadaire s'appuie sur les phases du BTE.<br>
       <div class="row" style="justify-content:center;margin-top:10px"><button class="btn primary" data-act="goto" data-view="bte">Construire le BTE</button>
       <button class="btn" data-act="importFichier">📥 Importer un BTE SMAC</button></div></div></div>`;
   }
   const sem = ui.semaine;
-  const calc = calcSuivi(c.id, sem);
-  const precedent = calcSuivi(c.id, addDays(sem, -1));
+  const calc = calcSuivi(db, c.id, sem);
+  const precedent = calcSuivi(db, c.id, addDays(sem, -1));
   const entreesSem = deCh(db.suivi).filter(s => s.semaine === sem);
   const totalSem = entreesSem.reduce((t, s) => t + num(s.heures), 0);
   const nSem = c.dateDebut ? Math.floor((new Date(sem) - new Date(lundi(c.dateDebut))) / (7 * 86400000)) + 1 : null;
@@ -523,7 +463,7 @@ function vBTE(c) {
 }
 
 /* -------------------------------- Journal -------------------------------- */
-function vJournal(c) {
+function vJournal(_c) {
   const js = deCh(db.journal).sort((a, b) => b.date.localeCompare(a.date));
   const nI = js.filter(j => j.intemperie).length;
   const hT = js.reduce((t, j) => t + num(j.heures), 0);
@@ -592,14 +532,16 @@ function vQualite(c) {
 /* -------------------------- Chantiers & données -------------------------- */
 function vChantiers() {
   const liste = db.chantiers.map(c => {
-    const s = calcSuivi(c.id);
-    const t = statsTerrain(c.id);
+    const s = calcSuivi(db, c.id);
+    const t = statsTerrain(db, c.id);
     return `<div class="entry">
       <div class="entry-head">
         <div><b style="font-size:1.05rem">${esc(c.nom)}</b> ${c.id === ui.chantierId ? '<span class="badge ok">Actif</span>' : ''}
+          ${badgeEquipe(c)}
           <div class="small muted">${esc([c.client, c.metier, c.conducteur && 'CDT : ' + c.conducteur].filter(Boolean).join(' · '))}</div></div>
         <div class="row">
           ${c.id !== ui.chantierId ? `<button class="btn sm primary" data-act="chantierOuvrir" data-id="${esc(c.id)}">Ouvrir</button>` : ''}
+          ${!c.equipeId && Synchro.connecte() ? `<button class="btn sm" data-act="partager" data-id="${esc(c.id)}">☁️ Partager</button>` : ''}
           <button class="icon-btn" data-act="chantierEdit" data-id="${esc(c.id)}">✏️</button>
           <button class="icon-btn" data-act="chantierSuppr" data-id="${esc(c.id)}">🗑</button>
         </div>
@@ -613,6 +555,7 @@ function vChantiers() {
   return `
   <div class="card-head"><h2>⚙️ Chantiers & données</h2><button class="btn primary" data-act="chantierNew">➕ Nouveau chantier</button></div>
   <div class="card">${liste || '<div class="empty">Aucun chantier.</div>'}</div>
+  ${vSynchro()}
   <div class="grid grid-2">
     <div class="card">
       <h3 style="margin-bottom:8px">📥 Importer</h3>
@@ -642,6 +585,91 @@ function vChantiers() {
       <p class="small muted">Astuce : sur smartphone, « Ajouter à l'écran d'accueil » installe l'application, utilisable hors-ligne.</p>
     </div>
   </div>`;
+}
+
+/* ------------------------- Synchronisation en ligne ----------------------- */
+function badgeEquipe(c) {
+  if (!c.equipeId) return '<span class="badge">📱 Sur cet appareil</span>';
+  const eq = Synchro.equipes.find(e => e.id === c.equipeId);
+  return `<span class="badge blue">☁️ ${esc(eq ? eq.nom : 'Équipe')}</span>`;
+}
+
+function vSynchro() {
+  if (!Synchro.disponible()) return '';
+  if (!Synchro.connecte()) {
+    return `<div class="card"><h3 style="margin-bottom:6px">☁️ Synchronisation en ligne</h3>
+      <p class="small muted" style="margin-top:0">Connectez-vous pour partager des chantiers avec votre équipe : chaque appareil
+        (téléphone du chef de chantier, PC du conducteur…) voit les mêmes données, mises à jour en direct. Sans réseau, l'application
+        continue de fonctionner et envoie les saisies au retour de la connexion.</p>
+      <button class="btn primary" data-act="syncConnexion">Se connecter avec mon e-mail</button></div>`;
+  }
+  const eqs = Synchro.equipes.map(e => {
+    const nb = db.chantiers.filter(c => c.equipeId === e.id).length;
+    return `<div class="entry"><div class="entry-head">
+      <div><b>${esc(e.nom)}</b> <span class="badge ${e.role === 'admin' ? 'accent' : ''}">${e.role === 'admin' ? 'Administrateur' : 'Membre'}</span>
+        <div class="small muted">${nb} chantier(s) partagé(s)</div></div>
+      <button class="btn sm" data-act="equipeGerer" data-id="${esc(e.id)}">👥 Membres</button></div></div>`;
+  }).join('');
+  const etat = Synchro.etat === 'erreur' ? `<div class="warnbox">⚠️ ${esc(Synchro.erreur)}</div>` : '';
+  return `<div class="card" id="syncCard">
+    <div class="card-head"><h3>☁️ Synchronisation en ligne</h3>
+      <div class="row"><button class="btn sm" data-act="syncMaintenant">🔄 Synchroniser</button><button class="btn sm" data-act="syncDeconnexion">Se déconnecter</button></div></div>
+    <p class="small muted" style="margin-top:0">Connecté : <b>${esc(Synchro.email())}</b>${Synchro.derniere ? ` · dernière synchronisation ${Synchro.derniere.toLocaleTimeString('fr-FR')}` : ''}</p>
+    ${etat}
+    ${eqs || '<p class="small">Vous ne faites partie d\'aucune équipe. Créez-en une, ou demandez à un administrateur de vous inviter avec cette adresse e-mail.</p>'}
+    <div class="row" style="margin-top:8px"><input class="input grow" id="nouvelleEquipe" placeholder="Nom d'une nouvelle équipe (ex : Agence Normandie - Étanchéité)">
+      <button class="btn primary" data-act="equipeCreer">➕ Créer l'équipe</button></div>
+    <p class="small muted">Pour partager un chantier existant : bouton « ☁️ Partager » dans la liste ci-dessus.</p>
+  </div>`;
+}
+
+function modalConnexion() {
+  const etape2 = !!Synchro.emailEnAttente;
+  ouvrirModal('☁️ Connexion', `
+    <p class="small muted" style="margin-top:0">Pas de mot de passe : vous recevez un e-mail de connexion.</p>
+    ${champ('cxEmail', 'Adresse e-mail', Synchro.emailEnAttente || (user && user.email) || '', 'email', 'autocomplete="email"')}
+    <button class="btn primary block" data-act="syncEnvoyer">📧 Recevoir l'e-mail de connexion</button>
+    <div id="cxEtape2" class="${etape2 ? '' : 'hidden'}" style="margin-top:14px">
+      <div class="help">Ouvrez l'e-mail reçu <b>sur cet appareil</b> et touchez le lien — ou saisissez ci-dessous le code à 6 chiffres s'il figure dans l'e-mail.</div>
+      <div class="row">${'<input class="input grow" id="cxCode" inputmode="numeric" autocomplete="one-time-code" placeholder="Code à 6 chiffres">'}
+        <button class="btn" data-act="syncCode">Valider le code</button></div>
+    </div>`, `<button class="btn" data-act="fermerModal">Fermer</button>`);
+}
+
+async function modalEquipe(equipeId) {
+  const eq = Synchro.equipes.find(e => e.id === equipeId);
+  if (!eq) return;
+  ouvrirModal(`👥 ${esc(eq.nom)}`, '<p class="muted">Chargement…</p>', `<button class="btn" data-act="fermerModal">Fermer</button>`, { pasDeFocus: true });
+  try {
+    const { membres, invitations } = await Synchro.membres(equipeId);
+    const admin = eq.role === 'admin';
+    const moi = Synchro.session.user.id;
+    const enAttente = invitations.filter(i => !i.acceptee_le);
+    $('#modalRoot .modal-body').innerHTML = `
+      <h4 style="margin:0 0 6px">Membres (${membres.length})</h4>
+      ${membres.map(m => `<div class="entry"><div class="entry-head"><div>${esc(m.email)} <span class="badge ${m.role === 'admin' ? 'accent' : ''}">${m.role === 'admin' ? 'Admin' : 'Membre'}</span>${m.user_id === moi ? ' <span class="badge ok">Vous</span>' : ''}</div>
+        ${(admin && m.user_id !== moi) || m.user_id === moi ? `<button class="btn sm danger" data-act="membreRetirer" data-eq="${esc(equipeId)}" data-u="${esc(m.user_id)}">${m.user_id === moi ? 'Quitter l\'équipe' : 'Retirer'}</button>` : ''}</div></div>`).join('')}
+      ${enAttente.length ? `<h4 style="margin:12px 0 6px">Invitations en attente</h4>${enAttente.map(i => `<div class="entry"><div class="entry-head"><div>${esc(i.email)} <span class="badge warn">En attente</span></div>
+        ${admin ? `<button class="btn sm" data-act="invitationAnnuler" data-eq="${esc(equipeId)}" data-email="${esc(i.email)}">Annuler</button>` : ''}</div></div>`).join('')}` : ''}
+      ${admin ? `<div class="sep"></div><h4 style="margin:0 0 6px">Inviter une personne</h4>
+        <div class="row"><input class="input grow" id="invEmail" type="email" placeholder="e-mail de la personne">
+          <select class="input" id="invRole" style="width:auto"><option value="membre">Membre</option><option value="admin">Administrateur</option></select>
+          <button class="btn primary" data-act="equipeInviter" data-eq="${esc(equipeId)}">Inviter</button></div>
+        <p class="small muted">La personne ouvre l'application, se connecte avec <b>cette adresse</b> et rejoint automatiquement l'équipe.
+          Envoyez-lui le lien de l'application : <code>${esc(location.origin + location.pathname)}</code></p>` : ''}`;
+  } catch (e) { $('#modalRoot .modal-body').innerHTML = `<div class="warnbox">${esc(e.message || e)}</div>`; }
+}
+
+function modalPartager(c) {
+  const eqs = Synchro.equipes;
+  if (!eqs.length) return toast('Créez d\'abord une équipe (Chantiers & données → Synchronisation en ligne).');
+  ouvrirModal('☁️ Partager le chantier', `
+    <p style="margin-top:0">« <b>${esc(c.nom)}</b> » et toutes ses données (BTE, suivi, terrain, journal, réserves, check-lists)
+      seront visibles et modifiables par les membres de l'équipe choisie.</p>
+    ${selectHTML('pgEquipe', 'Équipe', eqs.map(e => e.nom), eqs[0].nom)}
+    <input type="hidden" id="pgChantier" value="${esc(c.id)}">
+    <p class="small muted">Un chantier partagé ne peut pas être déplacé vers une autre équipe.</p>`,
+    `<button class="btn" data-act="fermerModal">Annuler</button><button class="btn primary" data-act="partagerValider">Partager</button>`);
 }
 
 /* ================================ Modales ================================ */
@@ -801,7 +829,7 @@ function modalGenTaches() {
 
 /* ================================ Actions ================================ */
 const ACT = {
-  goto: el => { ui.view = el.dataset.view; render(); window.scrollTo(0, 0); },
+  goto: el => { ui.view = el.dataset.view; render(); scrollTo(0, 0); },
   fermerModal,
   identite: () => modalIdentite(false),
   saveIdentite: () => {
@@ -818,7 +846,7 @@ const ACT = {
   chantierOuvrir: el => { ui.chantierId = el.dataset.id; ui.zone = null; ui.view = 'tableau'; render(); },
   chantierSuppr: el => {
     const c = db.chantiers.find(x => x.id === el.dataset.id);
-    if (!c || !confirm(`Supprimer définitivement le chantier « ${c.nom} » et toutes ses données ?`)) return;
+    if (!c || !confirm(`Supprimer définitivement le chantier « ${c.nom} » et toutes ses données ?${c.equipeId ? '\n\n⚠️ Chantier partagé : il sera supprimé pour TOUTE l\'équipe.' : ''}`)) return;
     supprimerChantier(c.id); save(); render(); toast('Chantier supprimé');
   },
   saveChantier: () => {
@@ -882,7 +910,7 @@ const ACT = {
     let txt = `${ch().nom} — travaux du ${fmtDate(auj)}${nomUser() ? ' (' + nomUser() + ')' : ''}\n\n`;
     Object.entries(parZone).forEach(([z, ts]) => { txt += `📍 ${z}\n` + ts.map(t => `- ${t.tache}${t.obs ? ' (obs : ' + t.obs + ')' : ''}`).join('\n') + '\n\n'; });
     try { await navigator.clipboard.writeText(txt.trim()); toast('📋 Récap copié — collez-le dans WhatsApp / mail'); }
-    catch (e) { ouvrirModal('Récap du jour', `<textarea class="input" rows="12">${esc(txt.trim())}</textarea>`); }
+    catch (_e) { ouvrirModal('Récap du jour', `<textarea class="input" rows="12">${esc(txt.trim())}</textarea>`); }
   },
   genTaches: () => modalGenTaches(),
   genSerie: () => {
@@ -916,10 +944,10 @@ const ACT = {
 
   // Suivi
   semNav: el => { const d = Number(el.dataset.d); ui.semaine = d === 0 ? lundi(aujourdHui()) : addDays(ui.semaine, d); render(); },
-  allerSemaine: el => { ui.semaine = el.dataset.s; render(); window.scrollTo(0, 0); },
+  allerSemaine: el => { ui.semaine = el.dataset.s; render(); scrollTo(0, 0); },
   suiviQte: el => {
     const o = el.dataset.o, p = el.dataset.p;
-    const ph = phasesBTE(ui.chantierId).find(x => x.ouvrage === o && x.phase === p);
+    const ph = phasesBTE(db, ui.chantierId).find(x => x.ouvrage === o && x.phase === p);
     ouvrirModal('📐 Avancement depuis les quantités', `
       <p class="small muted" style="margin-top:0">${esc(o)} · <b>${esc(p)}</b></p>
       <div class="grid grid-2">${champ('qFait', `Quantité réalisée (cumul)`, '', 'number', 'step="any"')}${champ('qTotal', `Quantité totale (${esc(ph && ph.unite || '')})`, ph ? ph.metreMax : '', 'number', 'step="any"')}</div>
@@ -1000,10 +1028,70 @@ const ACT = {
     save(); fermerModal(); render(); toast('Réserve enregistrée');
   },
 
+  // Synchronisation
+  syncConnexion: () => modalConnexion(),
+  syncEnvoyer: async el => {
+    const email = val('cxEmail');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('Adresse e-mail invalide');
+    el.disabled = true;
+    try { await Synchro.demanderCode(email); $('#cxEtape2').classList.remove('hidden'); toast('📧 E-mail envoyé à ' + email); }
+    catch (e) { toast('❌ ' + (e.message || e)); }
+    el.disabled = false;
+  },
+  syncCode: async () => {
+    const code = val('cxCode');
+    if (!/^\d{6,10}$/.test(code)) return toast('Code invalide');
+    try { await Synchro.verifierCode(code); fermerModal(); toast('✅ Connecté'); }
+    catch (e) { toast('❌ ' + (e.message || e)); }
+  },
+  syncDeconnexion: async () => {
+    if (!confirm('Se déconnecter ? Les chantiers partagés restent sur cet appareil mais ne seront plus synchronisés.')) return;
+    await Synchro.deconnecter(); render();
+  },
+  syncMaintenant: () => { Synchro.planifier(0); toast('🔄 Synchronisation…'); },
+  syncBouton: () => { ui.view = 'chantiers'; render(); const card = $('#syncCard'); if (card) card.scrollIntoView({ behavior: 'smooth' }); },
+  equipeCreer: async () => {
+    const nom = val('nouvelleEquipe');
+    if (!nom) return toast('Donnez un nom à l\'équipe');
+    try { await Synchro.creerEquipe(nom); render(); toast(`Équipe « ${nom} » créée`); }
+    catch (e) { toast('❌ ' + (e.message || e)); }
+  },
+  equipeGerer: el => modalEquipe(el.dataset.id),
+  equipeInviter: async el => {
+    const email = val('invEmail').toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('Adresse e-mail invalide');
+    try { await Synchro.inviter(el.dataset.eq, email, val('invRole')); toast(`✉️ ${email} invité(e)`); modalEquipe(el.dataset.eq); }
+    catch (e) { toast('❌ ' + (/duplicate/i.test(e.message || '') ? 'Déjà invité(e)' : (e.message || e))); }
+  },
+  invitationAnnuler: async el => {
+    try { await Synchro.annulerInvitation(el.dataset.eq, el.dataset.email); modalEquipe(el.dataset.eq); }
+    catch (e) { toast('❌ ' + (e.message || e)); }
+  },
+  membreRetirer: async el => {
+    const moi = el.dataset.u === Synchro.session.user.id;
+    if (!confirm(moi ? 'Quitter cette équipe ? Ses chantiers resteront sur cet appareil sans être synchronisés.' : 'Retirer ce membre de l\'équipe ?')) return;
+    try {
+      await Synchro.retirerMembre(el.dataset.eq, el.dataset.u);
+      if (moi) {
+        db.chantiers.filter(c => c.equipeId === el.dataset.eq).forEach(c => { delete c.equipeId; });
+        Synchro.oublierEtat(el.dataset.eq); enregistrerLocal();
+        await Synchro.chargerEquipes(); fermerModal(); render();
+      } else modalEquipe(el.dataset.eq);
+    } catch (e) { toast('❌ ' + (e.message || e)); }
+  },
+  partager: el => modalPartager(db.chantiers.find(c => c.id === el.dataset.id)),
+  partagerValider: () => {
+    const c = db.chantiers.find(x => x.id === val('pgChantier'));
+    const eq = Synchro.equipes.find(e => e.nom === val('pgEquipe'));
+    if (!c || !eq) return;
+    c.equipeId = eq.id;
+    save(); fermerModal(); render(); toast(`☁️ « ${c.nom} » partagé avec ${eq.nom}`);
+  },
+
   // QR
   scanQR: () => lancerScan(),
   qrEtiquettes: () => etiquettesQR(),
-  imprimer: () => window.print(),
+  imprimer: () => print(),
 
   // Données
   importFichier: () => choisirFichier(),
@@ -1021,8 +1109,9 @@ const ACT = {
     save(); render(); toast('Démo CIGV chargée');
   },
   toutEffacer: () => {
-    if (!confirm('Effacer TOUTES les données de l\'application sur cet appareil ?')) return;
+    if (!confirm('Effacer TOUTES les données de l\'application sur cet appareil ?\n(Les chantiers partagés restent en ligne et reviendront à la prochaine synchronisation.)')) return;
     if (!confirm('Dernière confirmation : cette action est irréversible. Pensez à exporter une sauvegarde.')) return;
+    Synchro.oublierEtat();
     db = dbVide(); ui.chantierId = null; save(); render(); toast('Données effacées');
   }
 };
@@ -1078,7 +1167,8 @@ function marquer(t, fait) {
 function majSuivi(ouvrage, phase, champs) {
   const cid = ui.chantierId, sem = ui.semaine;
   let e = db.suivi.find(s => s.chantierId === cid && s.semaine === sem && s.ouvrage === ouvrage && s.phase === phase);
-  if (!e) { e = { id: uid(), chantierId: cid, semaine: sem, ouvrage, phase, pct: null, heures: 0 }; db.suivi.push(e); }
+  // Identifiant déterministe : deux appareils saisissant la même phase la même semaine modifient la même saisie
+  if (!e) { e = { id: `s|${cid}|${sem}|${empreinte(ouvrage + '|' + phase)}`, chantierId: cid, semaine: sem, ouvrage, phase, pct: null, heures: 0 }; db.suivi.push(e); }
   Object.assign(e, champs);
   if ((e.pct === null || e.pct === undefined) && !num(e.heures)) db.suivi = db.suivi.filter(s => s !== e);
   save();
@@ -1125,6 +1215,7 @@ async function importerFichier(file) {
       const d = JSON.parse(await file.text());
       if (!d || !Array.isArray(d.chantiers)) throw new Error('Fichier de sauvegarde invalide');
       if (!confirm(`Restaurer cette sauvegarde (${d.chantiers.length} chantier(s)) ?\nOK = remplacer les données actuelles.`)) return;
+      Synchro.oublierEtat();
       db = Object.assign(dbVide(), d); ui.chantierId = null; save(); fermerModal(); render(); toast('Sauvegarde restaurée');
       return;
     }
@@ -1140,27 +1231,6 @@ async function importerFichier(file) {
     console.error(e);
     toast('❌ Import impossible : ' + (e.message || e));
   }
-}
-
-function parseCSV(txt) {
-  txt = txt.replace(/^﻿/, '');
-  const premiere = txt.split(/\r?\n/)[0] || '';
-  const delim = [';', '\t', ','].map(d => [d, premiere.split(d).length]).sort((a, b) => b[1] - a[1])[0][0];
-  const rows = []; let row = [], cur = '', q = false;
-  for (let i = 0; i < txt.length; i++) {
-    const ch_ = txt[i];
-    if (q) {
-      if (ch_ === '"') { if (txt[i + 1] === '"') { cur += '"'; i++; } else q = false; }
-      else cur += ch_;
-    } else if (ch_ === '"') q = true;
-    else if (ch_ === delim) { row.push(cur); cur = ''; }
-    else if (ch_ === '\n' || ch_ === '\r') {
-      if (ch_ === '\r' && txt[i + 1] === '\n') i++;
-      row.push(cur); rows.push(row); row = []; cur = '';
-    } else cur += ch_;
-  }
-  if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
-  return rows.filter(r => r.some(c => String(c).trim() !== ''));
 }
 
 function importerTerrain(rows) {
@@ -1329,7 +1399,7 @@ function exporterExcel() {
   const add = (nom, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), nom);
   add('BTE', [['Ouvrage', 'Phase', 'Opération', 'Désignation', 'Métré', 'Unité', 'Cadence (u/j/homme)', 'Heures', 'Budget €', 'Devis €'],
     ...deCh(db.ops).map(o => { const h = heuresOp(o, c); return [o.ouvrage, o.phase, o.operation, o.designation, num(o.metre), o.unite, num(o.cadence), +h.toFixed(2), +(h * num(c.tauxHoraire)).toFixed(2), num(o.devis)]; })]);
-  const s = calcSuivi(c.id);
+  const s = calcSuivi(db, c.id);
   add('Avancement', [['Ouvrage', 'Phase', 'Objectif h', '% réalisé', 'H. pointées', 'Écart h à date', 'Impact € à date', 'Écart h projeté', 'Impact € projeté'],
     ...s.rows.map(r => [r.ouvrage, r.phase, +r.budget.toFixed(2), +r.pct.toFixed(3), r.heures, +r.ecartH.toFixed(2), +r.impact.toFixed(2), +r.ecartProj.toFixed(2), +r.impactProj.toFixed(2)]),
     ['TOTAL', '', +s.tot.budget.toFixed(2), +s.tot.pct.toFixed(3), s.tot.heures, +s.tot.ecartH.toFixed(2), +s.tot.impact.toFixed(2), +s.tot.ecartProj.toFixed(2), +s.tot.impactProj.toFixed(2)]]);
@@ -1345,16 +1415,17 @@ function exporterExcel() {
 }
 
 // jsPDF (polices standard) : remplacer les espaces insécables et caractères hors Latin-1
-const pdfTxt = s => String(s ?? '').replace(/[  ]/g, ' ').replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').replace(/œ/g, 'oe').replace(/Œ/g, 'OE').replace(/[^\x00-\xFF€]/g, '');
+// deno-lint-ignore no-control-regex
+const pdfTxt = s => String(s ?? '').replace(/[\u202f\u00a0]/g, ' ').replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').replace(/œ/g, 'oe').replace(/Œ/g, 'OE').replace(/[^\x00-\xFF€]/g, '');
 
 async function rapportPDF() {
   const c = ch();
   if (!c) return;
-  if (!window.jspdf) return toast('Bibliothèque PDF non chargée (réseau requis au premier lancement).');
-  const { jsPDF } = window.jspdf;
+  if (!globalThis.jspdf) return toast('Bibliothèque PDF non chargée (réseau requis au premier lancement).');
+  const { jsPDF } = globalThis.jspdf;
   const doc = new jsPDF();
-  const s = calcSuivi(c.id);
-  const t = statsTerrain(c.id);
+  const s = calcSuivi(db, c.id);
+  const t = statsTerrain(db, c.id);
   const P = [30, 58, 95];
   const T = (rows) => rows.map(r => r.map(pdfTxt));
 
@@ -1445,7 +1516,7 @@ async function lancerScan() {
         const v2 = $('#qrVideo'); if (!v2) return arreterScan();
         const codes = await det.detect(v2);
         if (codes.length) { const txt = codes[0].rawValue; fermerModal(); traiterCible(txt); }
-      } catch (e) { /* image pas prête */ }
+      } catch (_e) { /* image pas prête */ }
     }, 350);
   } catch (e) { $('#qrStatut').textContent = '❌ Caméra inaccessible : ' + (e.message || e); }
 }
@@ -1463,7 +1534,7 @@ function traiterCible(texte) {
       cNom = u.searchParams.get('c') || u.searchParams.get('chantier') || '';
       zNom = u.searchParams.get('z') || u.searchParams.get('zone') || u.searchParams.get('support') || '';
     } else if (zNom.includes('|')) { [cNom, zNom] = zNom.split('|').map(s => s.trim()); }
-  } catch (e) { /* texte brut */ }
+  } catch (_e) { /* texte brut */ }
   if (cNom) {
     const c = db.chantiers.find(x => x.id === cNom || norm(x.nom) === norm(cNom));
     if (!c) return toast(`Chantier « ${cNom} » introuvable sur cet appareil`);
@@ -1511,12 +1582,13 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modalVerr
 
 $('#tabs').addEventListener('click', e => {
   const b = e.target.closest('.tab');
-  if (b) { ui.view = b.dataset.view; render(); window.scrollTo(0, 0); }
+  if (b) { ui.view = b.dataset.view; render(); scrollTo(0, 0); }
 });
 $('#chantierSelect').addEventListener('change', e => { ui.chantierId = e.target.value; ui.zone = null; render(); });
 $('#userChip').addEventListener('click', () => modalIdentite(false));
-window.addEventListener('online', () => { renderHeader(); toast('🌐 Connexion rétablie'); });
-window.addEventListener('offline', () => { renderHeader(); toast('📴 Hors-ligne : vos saisies restent enregistrées sur l\'appareil'); });
+$('#syncBtn').addEventListener('click', () => (Synchro.connecte() ? ACT.syncBouton() : modalConnexion()));
+addEventListener('online', () => { renderHeader(); toast('🌐 Connexion rétablie'); });
+addEventListener('offline', () => { renderHeader(); toast('📴 Hors-ligne : vos saisies restent enregistrées sur l\'appareil'); });
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(() => { /* pas bloquant */ });
@@ -1532,3 +1604,21 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   }
   if (!user) modalIdentite(true);
 })();
+
+/* --------------------------- Branchement synchro ------------------------- */
+let renduEnAttente = false;
+// Après réception de données : rafraîchir sans perturber une saisie en cours
+function rafraichirApresSynchro() {
+  const a = document.activeElement;
+  if (a && a.matches && a.matches('#view input, #view textarea, #view select')) { renduEnAttente = true; return; }
+  render();
+}
+document.addEventListener('focusout', () => setTimeout(() => {
+  if (renduEnAttente && !(document.activeElement && document.activeElement.matches('#view input, #view textarea, #view select'))) { renduEnAttente = false; render(); }
+}, 50));
+
+Synchro.base = () => db;
+Synchro.enregistrerBase = () => enregistrerLocal();
+Synchro.onChange = n => { rafraichirApresSynchro(); toast(`☁️ ${n} mise(s) à jour reçue(s)`); };
+Synchro.onStatut = () => { renderHeader(); if (ui.view === 'chantiers' && !$('#modalRoot').innerHTML) rafraichirApresSynchro(); };
+document.addEventListener('DOMContentLoaded', () => { Synchro.init().then(() => renderHeader()).catch(e => console.error(e)); });

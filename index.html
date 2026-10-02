@@ -16,6 +16,7 @@
   <script src="vendor/jspdf.umd.min.js" defer></script>
   <script src="vendor/jspdf.plugin.autotable.min.js" defer></script>
   <script src="vendor/qrcode.min.js" defer></script>
+  <script src="vendor/supabase.js" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -23,6 +24,7 @@
       <div class="brand">Om<span>Sm</span>K</div>
       <select id="chantierSelect" class="chantier-select" aria-label="Chantier actif"></select>
       <span id="netDot" class="net-dot" title="En ligne"></span>
+      <button id="syncBtn" class="user-chip" title="Synchronisation en ligne">☁️</button>
       <button id="userChip" class="user-chip" title="Changer d'utilisateur">👤</button>
     </div>
     <nav class="tabs" id="tabs">
@@ -42,7 +44,10 @@
   <div id="printArea" class="hidden"></div>
   <div id="toast"></div>
 
+  <script src="js/config.js"></script>
   <script src="js/referentiel.js"></script>
+  <script src="js/calculs.js"></script>
+  <script src="js/synchro.js"></script>
   <script src="js/demo.js"></script>
   <script src="js/app.js"></script>
 </body>

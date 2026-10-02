@@ -1,10 +1,10 @@
 /* Service worker OmSmK : application utilisable hors-ligne sur chantier */
-const CACHE = 'omsmk-v1';
+const CACHE = 'omsmk-v2';
 const SHELL = [
   './', './index.html', './manifest.json', './css/app.css',
-  './js/referentiel.js', './js/demo.js', './js/app.js',
+  './js/config.js', './js/referentiel.js', './js/calculs.js', './js/synchro.js', './js/demo.js', './js/app.js',
   './icons/icon-192.png', './icons/icon-512.png',
-  './vendor/xlsx.full.min.js', './vendor/jspdf.umd.min.js', './vendor/jspdf.plugin.autotable.min.js', './vendor/qrcode.min.js'
+  './vendor/xlsx.full.min.js', './vendor/jspdf.umd.min.js', './vendor/jspdf.plugin.autotable.min.js', './vendor/qrcode.min.js', './vendor/supabase.js'
 ];
 
 self.addEventListener('install', e => {
@@ -16,19 +16,11 @@ self.addEventListener('activate', e => {
     .then(() => self.clients.claim()));
 });
 
-// Réseau d'abord pour l'application (mises à jour), cache en secours ; cache d'abord pour les bibliothèques CDN
+// Réseau d'abord (mises à jour), cache en secours pour fonctionner hors-ligne.
+// Les requêtes vers d'autres domaines (API Supabase) ne sont jamais mises en cache.
 self.addEventListener('fetch', e => {
   const req = e.request;
-  if (req.method !== 'GET') return;
-  const url = new URL(req.url);
-  const cdn = url.origin !== location.origin;
-  if (cdn) {
-    e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => {
-      if (res.ok || res.type === 'opaque') { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
-      return res;
-    })));
-    return;
-  }
+  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
   e.respondWith(fetch(req).then(res => {
     if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
     return res;

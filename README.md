@@ -15,7 +15,7 @@ Elle fonctionne **hors-ligne** sur smartphone, tablette ou PC, sans serveur ni c
 | 🧮 **BTE** | Opérations par complexe / ouvrage et phase : métré, cadence (u/j/homme), heures, budget MO, devis, écarts. Bibliothèque des **cadences standard** (simulateurs Étanchéité V10 et Façades V8) avec coefficient chantier. Durée indicative selon la taille de l'équipe. |
 | 📒 **Journal** | Effectif, météo, heures, travaux et événements. Déclaration d'**intempérie** avec la liste des bonnes pratiques à vérifier avant de s'arrêter. |
 | 🛡️ **Qualité** | Réserves / OPR (origine, responsable, échéance, levée), **check-list CDT** (20 points, 6 temps forts) et contrôle qualité de fin de chantier. |
-| ⚙️ **Chantiers & données** | Fiche chantier, imports, exports Excel / PDF, sauvegarde et restauration JSON, démo. |
+| ⚙️ **Chantiers & données** | Fiche chantier, synchronisation en ligne (équipes, partage), imports, exports Excel / PDF, sauvegarde et restauration JSON, démo. |
 
 ### Calculs (identiques au fichier de suivi standard SMAC)
 - Heures budgétées d'une opération = métré ÷ cadence × heures par jour (ou heures au forfait)
@@ -35,19 +35,43 @@ Contrôlé sur le cas pratique CIGV : 133,5 h budgétées, +1,86 h / +55,75 € 
 - **En local** : `python3 -m http.server` dans le dossier, puis ouvrir http://localhost:8000.
 - Les QR codes de zone contiennent l'URL de l'application avec `?c=<chantier>&z=<zone>` : le scan ouvre directement la saisie de la zone.
 
-## Données
-Toutes les données sont stockées **sur l'appareil** (localStorage du navigateur). Exportez régulièrement une sauvegarde JSON.
-Pour partager un chantier entre plusieurs appareils, il faut pour l'instant passer par la sauvegarde JSON. La synchronisation multi-utilisateurs
-(par exemple avec Supabase) est la prochaine étape envisagée.
+## Données et synchronisation en ligne
+Les données sont d'abord stockées **sur l'appareil** (localStorage) : l'application fonctionne sans réseau.
+
+La **synchronisation en ligne** (onglet ⚙️ Chantiers & données → ☁️ Synchronisation en ligne) permet de travailler à plusieurs :
+1. chaque personne se connecte avec son **adresse e-mail** (lien ou code reçu par e-mail, sans mot de passe) ;
+2. un conducteur crée une **équipe** et y **invite** les personnes par e-mail (rôle membre ou administrateur) ;
+3. il **partage** un chantier avec l'équipe : BTE, suivi hebdo, tâches terrain, journal, réserves et check-lists sont alors visibles et modifiables par tous les membres, mis à jour en direct ;
+4. hors-ligne, les saisies restent sur l'appareil et partent au retour du réseau. Si deux personnes modifient le même élément, la modification la plus récente l'emporte.
+
+Les chantiers non partagés restent uniquement sur l'appareil. Hébergement : projet Supabase (base PostgreSQL), accès protégé par des règles RLS
+(un utilisateur ne voit que les équipes dont il est membre). Schéma : `supabase/migrations/`.
+
+### Réglages Supabase à faire une fois (tableau de bord Supabase)
+- **Authentication → URL Configuration** : *Site URL* = l'adresse publique de l'application (ex. `https://mcxsimm.github.io/OmSmK/`), à ajouter aussi dans *Redirect URLs*.
+- **Authentication → Email Templates → Magic Link** : ajouter `{{ .Token }}` dans le message pour recevoir aussi un **code à 6 chiffres** (pratique quand l'application est installée sur l'écran d'accueil).
+- L'envoi d'e-mails intégré à Supabase est limité à quelques messages par heure : pour une équipe, configurer un SMTP (Authentication → SMTP Settings).
+
+## Tests
+```
+deno lint
+deno test -A
+```
+Les tests vérifient les calculs (contrôlés sur le BTE du cas CIGV), l'import CSV et la logique de synchronisation (conflits, suppressions, hors-ligne).
 
 ## Structure
 ```
 index.html            Application (shell)
 css/app.css           Styles
 js/referentiel.js     Référentiel métier : phases, opérations, cadences, check-lists, intempéries
-js/app.js             Logique, vues, calculs, imports / exports
+js/calculs.js         Calculs métier purs (BTE, suivi, terrain, CSV)
+js/synchro.js         Synchronisation en ligne (Supabase)
+js/config.js          Adresse et clé publique du projet Supabase
+js/app.js             Logique, vues, imports / exports
 js/demo.js            Données de démonstration (cas pratique CIGV)
 sw.js                 Service worker (hors-ligne)
-vendor/               SheetJS (Apache-2.0), jsPDF + AutoTable (MIT), qrcodejs (MIT)
+vendor/               SheetJS (Apache-2.0), jsPDF + AutoTable (MIT), qrcodejs (MIT), supabase-js (MIT)
+supabase/migrations/  Schéma de la base en ligne
+tests/                Tests automatisés (Deno)
 exemples/             Fichier d'exemple d'import terrain
 ```

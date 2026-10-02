@@ -97,6 +97,8 @@ async function importerBTE(wb, nomFichier) {
     };
     info.nom = pick(/^\s*chantier\s*:/i); info.conducteur = pick(/conducteur/i); info.imputation = pick(/imputation/i);
     info.agence = pick(/^\s*agence/i); info.marcheHT = pick(/march.*sign/i); info.marge = pick(/marge commerciale/i); info.taux = pick(/taux horaire/i);
+    // Budgets d'achats (colonne BTE de la répartition des dépenses)
+    info.budget = { materiaux: num(pick(/total mat[ée]riaux/i)), soustraitance: num(pick(/total sous.?trait/i)), materiel: num(pick(/total mat[ée]riel/i)), divers: num(pick(/total divers/i)) };
   }
 
   // 2. Main d'œuvre : opérations
@@ -137,6 +139,21 @@ async function importerBTE(wb, nomFichier) {
 
   // 3. Suivi hebdomadaire (Étape 2)
   const suivi = [];
+  // 4. Liste des matériaux (onglet 1c) : catalogue proposé dans les commandes
+  const catalogue = [];
+  const shMat = sn.find(n => /mat[ée]riaux/i.test(n));
+  if (shMat) {
+    let cm = null;
+    lignes(shMat).forEach(row => {
+      const f = re => row.findIndex(v => typeof v === 'string' && re.test(v.trim()));
+      if (!cm && f(/^mat[ée]riaux$/i) >= 0 && f(/^unit/i) >= 0) { cm = { d: f(/^mat[ée]riaux$/i), u: f(/^unit/i), q: f(/^m[ée]tr/i), pu: f(/^pu/i), t: f(/^total/i) }; return; }
+      if (!cm) return;
+      const d = row[cm.d];
+      if (typeof d !== 'string' || !d.trim() || /^total/i.test(d) || num(row[cm.t]) <= 0) return;
+      catalogue.push({ designation: d.trim(), unite: String(row[cm.u] ?? '').trim(), quantite: num(row[cm.q]), pu: num(row[cm.pu]) });
+    });
+  }
+
   if (shSu) {
     const S = lignes(shSu);
     let semCols = [];
@@ -170,6 +187,8 @@ async function importerBTE(wb, nomFichier) {
     agence: info.agence ? String(info.agence) : c.agence, marcheHT: num(info.marcheHT) || c.marcheHT,
     margeCommerciale: num(info.marge) || c.margeCommerciale, tauxHoraire: num(info.taux) || c.tauxHoraire || REF.tauxHoraireDefaut, heuresJour: hj
   });
+  if (info.budget && Object.values(info.budget).some(v => v > 0)) c.budget = Object.assign({}, c.budget, info.budget);
+  if (catalogue.length) c.catalogue = catalogue;
   ops.forEach(o => db.ops.push(Object.assign({ id: uid(), chantierId: c.id }, o)));
   if (suivi.length) {
     const kMax = Math.max(...suivi.map(s => s.k));
@@ -217,6 +236,15 @@ function exporterExcel() {
     ...deCh(db.journal).sort((a, b) => a.date.localeCompare(b.date)).map(j => [j.date, j.meteo, num(j.effectif), num(j.heures), j.intemperie ? 'oui' : '', j.cause, j.texte, j.auteur])]);
   add('Réserves', [['Zone', 'Description', 'Origine', 'Responsable', 'Échéance', 'Statut', 'Créée le', 'Levée le'],
     ...deCh(db.reserves).map(r => [r.zone, r.description, r.origine, r.responsable, r.echeance, r.statut, r.creeLe, r.leveeLe])]);
+  add('Marché', [['Code', 'Désignation', 'Type', 'Montant HT'], ...postesDe(db, c.id).map(p => [p.code, p.designation, p.avenant ? 'Avenant' : 'Marché', num(p.montant)])]);
+  add('Situations', [['N°', 'Mois', 'Statut', 'Cumul HT', 'Mois HT', 'Retenue garantie', 'Net HT', 'TVA', 'Net TTC'],
+    ...situationsDe(db, c.id).map(s => { const t = calcSituation(db, c.id, s.id).tot; return [num(s.numero), s.mois, libStatut(STATUTS_SITUATION, s.statut), +t.cumul.toFixed(2), +t.mois.toFixed(2), +t.rg.toFixed(2), +t.netHT.toFixed(2), +t.tva.toFixed(2), +t.ttc.toFixed(2)]; })]);
+  add('Commandes', [['N°', 'Date', 'Fournisseur', 'Objet', 'Catégorie', 'Statut', 'Montant HT', 'Livraison prévue', 'Livraison réelle', 'N° facture', 'Montant facturé'],
+    ...(db.commandes || []).filter(x => x.chantierId === c.id).map(x => [x.numero, x.date, x.fournisseur, x.objet, x.categorie, libStatut(STATUTS_COMMANDE, x.statut), +montantCommande(x).toFixed(2), x.livraisonPrevue, x.livraisonReelle, x.factureNumero, num(x.factureMontant)])]);
+  const fi = calcFinances(db, c.id);
+  add('Finances', [['Poste', 'Budget', 'Réel / engagé', 'Fin d\'affaire'], ['Main d\'œuvre', fi.budget.mo, fi.reel.mo, fi.pfa.mo],
+    ...CATEGORIES_ACHAT.map(cat => { const k = CLE_BUDGET[cat]; return [cat, fi.budget[k], fi.reel[k], fi.pfa[k]]; }),
+    ['Total déboursé', fi.budget.total, fi.reel.total, fi.pfa.total], [], ['Chiffre d\'affaires', fi.ca], ['Marge prévue', fi.margePrevue], ['Marge fin d\'affaire', fi.margePFA], ['Facturé HT', fi.facture], ['Encaissé TTC', fi.encaisseTTC]]);
   toast('Export Excel généré', 'succes');
   XLSX.writeFile(wb, `OmSmK_${c.nom.replace(/[^\w-]+/g, '_')}_${aujourdHui()}.xlsx`);
 }
@@ -326,6 +354,18 @@ async function rapportPDF() {
     const hE = 16 + s.rows.length * 34; // hauteur du graphique en mode non compact
     titre('Écart d\'heures par phase', CW * hE / 760);
     await image(barresEcarts(s.rows, 760, { impression: true }), 760, hE);
+  }
+  const fi = calcFinances(db, c.id);
+  if (fi.ca) {
+    titre('Point financier', 60);
+    table(['Indicateur', 'Montant', 'Commentaire'], [
+      ['Chiffre d\'affaires (marché + avenants)', fmtE(fi.ca), fi.avenants ? `dont avenants ${fmtE(fi.avenants)}` : ''],
+      ['Facturé cumulé HT', fmtE(fi.facture), `${pc(fi.avFinancier)} du CA - avancement physique ${pc(fi.avPhysique)}`],
+      ['Encaissé TTC', fmtE(fi.encaisseTTC), `reste à encaisser ${fmtE(fi.resteAEncaisser)}`],
+      ['Déboursé réel / engagé', fmtE(fi.reel.total), `budget ${fmtE(fi.budget.total)}`],
+      ['Déboursé fin d\'affaire', fmtE(fi.pfa.total), `écart ${signeE(fi.budget.total - fi.pfa.total)}`],
+      ['Marge brute fin d\'affaire', fmtE(fi.margePFA), `${pc(fi.tauxMargePFA)} (prévue ${pc(fi.tauxMargePrevue)})`]
+    ], { columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } } });
   }
   const zones = zonesDe(c.id);
   if (zones.length) {
@@ -442,3 +482,137 @@ function etiquettesQR() {
   }));
 }
 
+
+/* ================== Documents : situation de travaux, commande ================== */
+function enTeteDocument(doc, titre, sousTitre, droite) {
+  const e = entreprise();
+  const M = 14, W = 210;
+  doc.setFillColor(14, 35, 64); doc.rect(0, 0, W, 4, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(16, 24, 40);
+  doc.text(pdfTxt(e.nom || 'Entreprise'), M, 16);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(102, 112, 133);
+  const lignesE = [...String(e.adresse || '').split('\n'), e.siret ? 'SIRET ' + e.siret : '', e.contact].filter(Boolean);
+  lignesE.forEach((l, i) => doc.text(pdfTxt(l), M, 21 + i * 4));
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(14, 35, 64);
+  doc.text(pdfTxt(titre), W - M, 16, { align: 'right' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(232, 89, 12);
+  doc.text(pdfTxt(sousTitre), W - M, 22, { align: 'right' });
+  doc.setTextColor(102, 112, 133); doc.setFontSize(8.5);
+  (droite || []).forEach((l, i) => doc.text(pdfTxt(l), W - M, 27 + i * 4, { align: 'right' }));
+  return Math.max(21 + lignesE.length * 4, 27 + (droite || []).length * 4) + 6;
+}
+
+function cadre(doc, x, y, w, titre, lignes) {
+  const h = 8 + lignes.length * 4.6;
+  doc.setDrawColor(228, 232, 238); doc.setFillColor(248, 249, 251); doc.roundedRect(x, y, w, h, 1.5, 1.5, 'FD');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(102, 112, 133); doc.text(pdfTxt(titre.toUpperCase()), x + 4, y + 5.5);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(16, 24, 40);
+  lignes.forEach((l, i) => { if (i === 0) doc.setFont('helvetica', 'bold'); else doc.setFont('helvetica', 'normal'); doc.text(pdfTxt(l), x + 4, y + 10.5 + i * 4.6, { maxWidth: w - 8 }); });
+  return h;
+}
+
+function piedDocument(doc, gauche) {
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(228, 232, 238); doc.line(14, 286, 196, 286);
+    doc.setFontSize(7.5); doc.setTextColor(102, 112, 133);
+    doc.text(pdfTxt(gauche), 14, 290.5);
+    doc.text(pdfTxt(`Page ${i} / ${n}`), 196, 290.5, { align: 'right' });
+  }
+}
+
+const STYLE_TABLE = {
+  theme: 'plain', margin: { left: 14, right: 14 },
+  styles: { font: 'helvetica', fontSize: 8.5, cellPadding: { top: 2.2, bottom: 2.2, left: 2, right: 2 }, textColor: [16, 24, 40], lineColor: [228, 232, 238], lineWidth: { bottom: 0.2 } },
+  headStyles: { fillColor: [14, 35, 64], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
+  bodyStyles: { fillColor: [255, 255, 255] }
+};
+
+function recapitulatif(doc, y, lignes) {
+  const x = 120, w = 76;
+  lignes.forEach(([l, v, fort], i) => {
+    const yy = y + i * 6;
+    if (fort) { doc.setFillColor(14, 35, 64); doc.rect(x, yy - 4.2, w, 6.4, 'F'); doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); }
+    else { doc.setTextColor(16, 24, 40); doc.setFont('helvetica', 'normal'); doc.setDrawColor(228, 232, 238); doc.line(x, yy + 2, x + w, yy + 2); }
+    doc.setFontSize(9);
+    doc.text(pdfTxt(l), x + 2, yy);
+    doc.text(pdfTxt(v), x + w - 2, yy, { align: 'right' });
+  });
+  return y + lignes.length * 6;
+}
+
+function situationPDF(sitId) {
+  const c = ch();
+  if (!globalThis.jspdf) return toast('Bibliothèque PDF non chargée.', 'erreur');
+  const { sit, prec, lignes, tot, pf } = calcSituation(db, c.id, sitId);
+  if (!sit) return;
+  const { jsPDF } = globalThis.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  let y = enTeteDocument(doc, `SITUATION DE TRAVAUX N° ${sit.numero}`, moisLong(sit.mois).replace(/^./, x => x.toUpperCase()),
+    [`Établie le ${fmtDate(sit.date || aujourdHui())}`, prec ? `Précédente : n° ${prec.numero} (${moisLong(prec.mois)})` : 'Première situation']);
+  const h1 = cadre(doc, 14, y, 88, 'Chantier', [c.nom, c.adresse || '', c.imputation ? `Imputation ${c.imputation}` : ''].filter(Boolean));
+  const h2 = cadre(doc, 108, y, 88, 'Maître d\'ouvrage', [c.client || '—', c.conducteur ? `Conducteur de travaux : ${c.conducteur}` : ''].filter(Boolean));
+  y += Math.max(h1, h2) + 7;
+  doc.autoTable(Object.assign({}, STYLE_TABLE, {
+    startY: y,
+    head: [['Code', 'Désignation', 'Montant HT', '% préc.', '% cumulé', 'Cumul HT', 'Mois HT'].map(pdfTxt)],
+    body: lignes.map(l => [l.poste.code, l.poste.designation + (l.poste.avenant ? ' (avenant)' : ''), fmtE2(l.poste.montant), pc(l.pctPrec), pc(l.pct), fmtE2(l.cumul), fmtE2(l.mois)].map(pdfTxt))
+      .concat([['', 'Total', fmtE2(tot.montant), pc(tot.montant ? tot.precedent / tot.montant : 0), pc(tot.pct), fmtE2(tot.cumul), fmtE2(tot.mois)].map(pdfTxt)]),
+    columnStyles: { 0: { cellWidth: 14 }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right', fontStyle: 'bold' } },
+    didParseCell: d => { if (d.section === 'body' && d.row.index === lignes.length) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [244, 246, 249]; } }
+  }));
+  y = doc.lastAutoTable.finalY + 10;
+  if (y > 220) { doc.addPage(); y = 20; }
+  const recap = [['Montant du marché HT', fmtE2(tot.montant)], ['Travaux cumulés HT', fmtE2(tot.cumul)], ['Situations précédentes HT', fmtE2(tot.precedent)], ['Montant de la situation HT', fmtE2(tot.mois)],
+    [`Retenue de garantie ${fmt(pf.rg, 1)} %`, '- ' + fmtE2(tot.rg)]];
+  if (pf.prorata) recap.push([`Compte prorata ${fmt(pf.prorata, 1)} %`, '- ' + fmtE2(tot.prorata)]);
+  recap.push(['Net HT', fmtE2(tot.netHT)], [`TVA ${fmt(pf.tva, 1)} %${pf.tva ? '' : ' (autoliquidation)'}`, fmtE2(tot.tva)], ['NET À PAYER TTC', fmtE2(tot.ttc), true]);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(102, 112, 133);
+  doc.text(pdfTxt(`Avancement cumulé : ${pc(tot.pct)} du marché`), 14, y);
+  const yFin = recapitulatif(doc, y, recap) + 14;
+  const ySig = Math.min(yFin, 250);
+  [['L\'entreprise', nomUser()], ['Visa du maître d\'œuvre', ''], ['Maître d\'ouvrage', '']].forEach(([t, n], i) => {
+    const x = 14 + i * 62;
+    doc.setDrawColor(205, 212, 222); doc.roundedRect(x, ySig, 58, 26, 1.5, 1.5);
+    doc.setFontSize(7.5); doc.setTextColor(102, 112, 133); doc.text(pdfTxt(t.toUpperCase()), x + 3, ySig + 5);
+    if (n) { doc.setFontSize(8.5); doc.setTextColor(16, 24, 40); doc.text(pdfTxt(n), x + 3, ySig + 10); }
+    doc.setFontSize(7); doc.setTextColor(152, 162, 179); doc.text(pdfTxt('Date et signature'), x + 3, ySig + 23);
+  });
+  piedDocument(doc, `${entreprise().nom || 'OmSmK'}  ·  ${c.nom}  ·  Situation n° ${sit.numero}`);
+  doc.save(`Situation_${String(sit.numero).padStart(2, '0')}_${sit.mois}_${c.nom.replace(/[^\w-]+/g, '_')}.pdf`);
+  toast(`Situation n° ${sit.numero} générée`, 'succes');
+}
+
+function bonCommandePDF(cmdId) {
+  const c = ch();
+  const x = (db.commandes || []).find(k => k.id === cmdId);
+  if (!x) return;
+  if (!globalThis.jspdf) return toast('Bibliothèque PDF non chargée.', 'erreur');
+  const { jsPDF } = globalThis.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  let y = enTeteDocument(doc, 'BON DE COMMANDE', `N° ${x.numero}`, [`Date : ${fmtDate(x.date) || fmtDate(aujourdHui())}`, x.categorie || '']);
+  const h1 = cadre(doc, 14, y, 88, 'Fournisseur', [x.fournisseur || '—']);
+  const h2 = cadre(doc, 108, y, 88, 'Livraison', [c.nom, c.adresse || '', x.livraisonPrevue ? `Date souhaitée : ${fmtDate(x.livraisonPrevue)}` : '', c.chef ? `Contact chantier : ${c.chef}` : ''].filter(Boolean));
+  y += Math.max(h1, h2) + 7;
+  if (x.objet) { doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(16, 24, 40); doc.text(pdfTxt('Objet : ' + x.objet), 14, y); y += 6; }
+  const lignes = x.lignes || [];
+  doc.autoTable(Object.assign({}, STYLE_TABLE, {
+    startY: y,
+    head: [['Désignation', 'Quantité', 'Unité', 'PU HT', 'Total HT'].map(pdfTxt)],
+    body: lignes.map(l => [l.designation, fmt(num(l.quantite), num(l.quantite) % 1 ? 2 : 0), l.unite, fmtE2(num(l.pu)), fmtE2(num(l.quantite) * num(l.pu))].map(pdfTxt)),
+    columnStyles: { 1: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right', fontStyle: 'bold' } }
+  }));
+  y = doc.lastAutoTable.finalY + 10;
+  const ht = montantCommande(x);
+  y = recapitulatif(doc, y, [['Total HT', fmtE2(ht)], ['TVA 20 %', fmtE2(ht * 0.2)], ['TOTAL TTC', fmtE2(ht * 1.2), true]]) + 10;
+  if (x.notes) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(71, 84, 103); doc.text(doc.splitTextToSize(pdfTxt('Conditions / remarques : ' + x.notes), 182), 14, y); y += 12; }
+  doc.setFontSize(8); doc.setTextColor(102, 112, 133);
+  doc.text(pdfTxt(`Merci de rappeler le n° ${x.numero} sur l'accusé de réception, le bon de livraison et la facture.`), 14, Math.min(y + 4, 262));
+  doc.setDrawColor(205, 212, 222); doc.roundedRect(130, Math.min(y + 10, 252), 66, 26, 1.5, 1.5);
+  doc.setFontSize(7.5); doc.text(pdfTxt('BON POUR COMMANDE'), 133, Math.min(y + 10, 252) + 5);
+  doc.setFontSize(8.5); doc.setTextColor(16, 24, 40); doc.text(pdfTxt(nomUser()), 133, Math.min(y + 10, 252) + 10);
+  piedDocument(doc, `${entreprise().nom || 'OmSmK'}  ·  ${c.nom}  ·  Commande ${x.numero}`);
+  doc.save(`Commande_${String(x.numero).replace(/[^\w-]+/g, '_')}.pdf`);
+  toast(`Bon de commande ${x.numero} généré`, 'succes');
+}

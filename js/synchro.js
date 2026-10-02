@@ -15,7 +15,7 @@
 // deno-lint-ignore-file no-unused-vars
 'use strict';
 
-const SYNC_COLLECTIONS = { op: 'ops', suivi: 'suivi', tache: 'taches', journal: 'journal', reserve: 'reserves' };
+const SYNC_COLLECTIONS = { op: 'ops', suivi: 'suivi', tache: 'taches', journal: 'journal', reserve: 'reserves', poste: 'postes', situation: 'situations', commande: 'commandes' };
 
 // Empreinte FNV-1a 32 bits (suffisante pour détecter un changement)
 function empreinte(str) {
@@ -41,7 +41,7 @@ function collecterEnregistrements(base) {
     if (cl) out.push({ id: 'cl|' + c.id, kind: 'checklist', chantierId: c.id, equipeId: c.equipeId, obj: cl });
   });
   Object.entries(SYNC_COLLECTIONS).forEach(([kind, cle]) => {
-    base[cle].forEach(o => {
+    (base[cle] || []).forEach(o => {
       const eq = equipeDe.get(o.chantierId);
       if (eq) out.push({ id: o.id, kind, chantierId: o.chantierId, equipeId: eq, obj: o });
     });
@@ -82,12 +82,12 @@ function validerEnvois(snap, envois, empreintes) {
 function trouverLocal(base, kind, id) {
   if (kind === 'chantier') return base.chantiers.find(c => c.id === id) || null;
   if (kind === 'checklist') return base.checklists[id.slice(3)] || null;
-  return base[SYNC_COLLECTIONS[kind]].find(o => o.id === id) || null;
+  return (base[SYNC_COLLECTIONS[kind]] || []).find(o => o.id === id) || null;
 }
 
 function insererDistant(base, kind, data) {
   if (kind === 'chantier') { base.chantiers.push(data); return; }
-  const arr = base[SYNC_COLLECTIONS[kind]];
+  const arr = base[SYNC_COLLECTIONS[kind]] = base[SYNC_COLLECTIONS[kind]] || [];
   if (kind === 'op') {
     let idx = -1;
     arr.forEach((o, i) => { if (o.chantierId === data.chantierId && o.ouvrage === data.ouvrage && o.phase === data.phase) idx = i; });
@@ -100,7 +100,7 @@ function insererDistant(base, kind, data) {
 function retirerLocal(base, kind, id) {
   if (kind === 'chantier') base.chantiers = base.chantiers.filter(c => c.id !== id);
   else if (kind === 'checklist') delete base.checklists[id.slice(3)];
-  else base[SYNC_COLLECTIONS[kind]] = base[SYNC_COLLECTIONS[kind]].filter(o => o.id !== id);
+  else base[SYNC_COLLECTIONS[kind]] = (base[SYNC_COLLECTIONS[kind]] || []).filter(o => o.id !== id);
 }
 
 /* Intègre les enregistrements reçus. Une modification locale non encore

@@ -13,6 +13,8 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 /* -------------------------------- Formats -------------------------------- */
 const fmt = (n, d = 1) => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmtE = n => Number(n || 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+// Au centime près : documents (situations, commandes) et montants unitaires
+const fmtE2 = n => Number(n || 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtCompact = n => Math.abs(n) >= 10000 ? Number(n).toLocaleString('fr-FR', { notation: 'compact', maximumFractionDigits: 1 }) : fmt(n, Math.abs(n) >= 100 ? 0 : 1);
 const pc = n => Math.round((n || 0) * 100) + ' %';
 const signe = (n, d = 1) => (n > 0.04 ? '+' : n < -0.04 ? '−' : '') + fmt(Math.abs(n), d);

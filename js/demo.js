@@ -85,5 +85,35 @@ function construireDemo(lundiCourant) {
     fin: {}
   };
 
-  return { chantier, ops, suivi, taches, journal, reserves, checklists };
+  // Gestion financière : budgets d'achats (synthèse du BTE CIGV), décomposition du marché, situations, commandes
+  chantier.budget = { materiaux: 9721.28, soustraitance: 2562.5, materiel: 500, divers: 1000 };
+  chantier.finances = { rg: 5, prorata: 0, tva: 20 };
+  chantier.catalogue = [
+    { designation: 'Vernis EIF', unite: 'L', quantite: 82, pu: 1.9 }, { designation: 'Hyrène 25/25 TS', unite: 'm²', quantite: 902, pu: 2.39 },
+    { designation: 'Isolant PU 120 mm', unite: 'm²', quantite: 430, pu: 10.75 }, { designation: 'Hyrène PY 35 (équerres)', unite: 'mL', quantite: 202, pu: 1.16 },
+    { designation: 'Gravillons roulés 5/15', unite: 't', quantite: 25, pu: 38 }, { designation: 'Couvertine acier galvanisé', unite: 'mL', quantite: 100, pu: 14.5 }
+  ];
+  const postesDef = [['01', 'Installation et sécurités', 1500], ['02', 'Pare-vapeur', 3200], ['03', 'Isolation thermique', 5200], ['04', 'Étanchéité bicouche', 7350], ['05', 'Relevés, solins et couvertines', 4200], ['06', 'Protection gravillons', 1200]];
+  const postes = postesDef.map(([code, designation, montant]) => ({ id: id(), chantierId: cid, code, designation, montant, avenant: false }));
+  postes.push({ id: id(), chantierId: cid, code: 'TS 01', designation: 'Crapaudines et trop-pleins supplémentaires', montant: 480, avenant: true });
+  const pcts1 = {}, pcts2 = {};
+  [1, 0.75, 0.3, 0, 0, 0, 0].forEach((v, i) => { pcts1[postes[i].id] = v; });
+  [1, 1, 1, 0.45, 0.2, 0, 0.5].forEach((v, i) => { pcts2[postes[i].id] = v; });
+  const moisS1 = s1.slice(0, 7), moisS2 = addDays(s1, 14).slice(0, 7);
+  const situations = [
+    { id: id(), chantierId: cid, numero: 1, mois: moisS1, date: addDays(s1, 9), statut: 'validee', pcts: pcts1, transmiseLe: addDays(s1, 9), valideeLe: addDays(s1, 12), auteur: 'Marc' },
+    { id: id(), chantierId: cid, numero: 2, mois: moisS2 === moisS1 ? addDays(s1, 40).slice(0, 7) : moisS2, date: addDays(s2, 3), statut: 'brouillon', pcts: pcts2, auteur: 'Marc' }
+  ];
+  const commandes = [
+    { id: id(), chantierId: cid, numero: 'CMD-001', fournisseur: 'Négoce Étanchéité Ouest', objet: 'Pare-vapeur, équerres et membranes', categorie: 'Matériaux', date: addDays(s1, -10), statut: 'livree', livraisonPrevue: addDays(s1, -2), livraisonReelle: addDays(s1, -2),
+      lignes: [{ designation: 'Vernis EIF', quantite: 82, unite: 'L', pu: 1.9 }, { designation: 'Hyrène 25/25 TS', quantite: 902, unite: 'm²', pu: 2.39 }, { designation: 'Hyrène PY 35 (équerres)', quantite: 202, unite: 'mL', pu: 1.16 }] },
+    { id: id(), chantierId: cid, numero: 'CMD-002', fournisseur: 'Isolation Distribution', objet: 'Isolant PU 120 mm', categorie: 'Matériaux', date: addDays(s1, -8), statut: 'livree', livraisonPrevue: addDays(s1, 3), livraisonReelle: addDays(s1, 4),
+      lignes: [{ designation: 'Isolant PU 120 mm', quantite: 430, unite: 'm²', pu: 10.75 }] },
+    { id: id(), chantierId: cid, numero: 'CMD-003', fournisseur: 'Négoce Étanchéité Ouest', objet: 'Gravillons et couvertines', categorie: 'Matériaux', date: addDays(s2, -3), statut: 'confirmee', livraisonPrevue: addDays(s2, -1),
+      lignes: [{ designation: 'Gravillons roulés 5/15', quantite: 25, unite: 't', pu: 38 }, { designation: 'Couvertine acier galvanisé', quantite: 100, unite: 'mL', pu: 14.5 }] },
+    { id: id(), chantierId: cid, numero: 'CMD-004', fournisseur: 'Levage Services', objet: 'Grue mobile — levage des matériaux R+7', categorie: 'Matériel', date: addDays(s1, -5), statut: 'facturee', livraisonPrevue: s1, livraisonReelle: s1,
+      lignes: [{ designation: 'Grue mobile avec opérateur', quantite: 1, unite: 'jour', pu: 480 }] }
+  ];
+
+  return { chantier, ops, suivi, taches, journal, reserves, checklists, postes, situations, commandes };
 }

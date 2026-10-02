@@ -10,7 +10,7 @@ const UI_KEY = 'omsmk_ui';
 const REF = REFERENTIEL;
 
 /* ================================ État =================================== */
-function dbVide() { return { version: 1, chantiers: [], ops: [], suivi: [], taches: [], journal: [], reserves: [], checklists: {} }; }
+function dbVide() { return { version: 1, chantiers: [], ops: [], suivi: [], taches: [], journal: [], reserves: [], checklists: {}, postes: [], situations: [], commandes: [] }; }
 function chargerDB() {
   const d = lireJSON(STORE_KEY, null);
   return d && Array.isArray(d.chantiers) ? Object.assign(dbVide(), d) : dbVide();
@@ -70,6 +70,11 @@ const NAV = [
     { v: 'journal', ic: 'notebook-pen', t: 'Journal de chantier' },
     { v: 'qualite', ic: 'shield-check', t: 'Qualité & réserves' }
   ]},
+  { groupe: 'Gestion', items: [
+    { v: 'finances', ic: 'wallet', t: 'Synthèse financière' },
+    { v: 'situations', ic: 'receipt', t: 'Situations mensuelles' },
+    { v: 'commandes', ic: 'shopping-cart', t: 'Commandes & achats' }
+  ]},
   { groupe: 'Organisation', items: [
     { v: 'portefeuille', ic: 'briefcase', t: 'Portefeuille' },
     { v: 'parametres', ic: 'settings', t: 'Paramètres' }
@@ -109,7 +114,7 @@ function renderSyncPill() {
   p.innerHTML = `<span class="dot"></span><span class="lbl">${lbl}</span>`;
 }
 
-const VUES = { tableau: vTableau, terrain: vTerrain, suivi: vSuivi, bte: vBTE, journal: vJournal, qualite: vQualite, portefeuille: vPortefeuille, parametres: vParametres };
+const VUES = { tableau: vTableau, terrain: vTerrain, suivi: vSuivi, bte: vBTE, journal: vJournal, qualite: vQualite, portefeuille: vPortefeuille, parametres: vParametres, finances: c => vFinances(c), situations: c => vSituations(c), commandes: c => vCommandes(c) };
 
 function render() {
   if (!ch() && db.chantiers.length) ui.chantierId = db.chantiers[0].id;
@@ -166,6 +171,11 @@ function alertes(c, s) {
   if (enRetard.length) out.push({ sev: 'critical', ic: 'shield-check', t: `${enRetard.length} réserve(s) en retard`, d: `Échéance de levée dépassée — ${enRetard.slice(0, 3).map(numeroReserve).join(', ')}${enRetard.length > 3 ? '…' : ''}.`, go: 'qualite' });
   const theo = avancementTheorique(c);
   if (theo !== null && s.rows.length && s.tot.pct + 0.1 < theo) out.push({ sev: 'warning', ic: 'calendar', t: 'Avancement en retard sur le planning', d: `${pc(s.tot.pct)} réalisé pour ${pc(theo)} de délai écoulé.` });
+  const cmdRetard = (db.commandes || []).filter(x => x.chantierId === c.id && commandeEngagee(x) && !commandeLivree(x) && x.livraisonPrevue && x.livraisonPrevue < auj);
+  if (cmdRetard.length) out.push({ sev: 'serious', ic: 'truck', t: `${cmdRetard.length} livraison(s) en retard`, d: cmdRetard.slice(0, 3).map(x => `${esc(x.numero)} — ${esc(x.fournisseur)}`).join(' · '), go: 'commandes' });
+  const fi = calcFinances(db, c.id);
+  if (fi.ca && fi.avFinancier + 0.1 < fi.avPhysique) out.push({ sev: 'warning', ic: 'receipt', t: 'Retard de facturation', d: `${pc(fi.avPhysique - fi.avFinancier)} d'avancement non facturé (≈ ${fmtE((fi.avPhysique - fi.avFinancier) * fi.ca)}).`, go: 'situations' });
+  if (fi.ca && c.dateDebut && c.dateDebut <= auj && !situationsDe(db, c.id).some(x => x.mois === auj.slice(0, 7)) && fi.avFinancier < 1) out.push({ sev: 'warning', ic: 'file-plus', t: 'Situation du mois à établir', d: `Aucune situation pour ${new Date(auj + 'T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}.`, go: 'situations' });
   const semCourante = lundi(auj);
   if (s.rows.length && c.dateDebut && c.dateDebut <= auj && (!c.dateFin || c.dateFin >= semCourante)
       && !deCh(db.suivi).some(x => x.semaine === semCourante)) out.push({ sev: 'warning', ic: 'notebook-pen', t: 'Suivi de la semaine à renseigner', d: `Semaine ${semISO(semCourante)} : % d'avancement et heures pointées non saisis.`, go: 'suivi' });
@@ -582,7 +592,7 @@ function vPortefeuille() {
 /* =============================== Paramètres ============================== */
 function vParametres() {
   const t = ui.paramTab;
-  const nav = [['equipe', 'users', 'Équipe & synchronisation'], ['donnees', 'database', 'Données'], ['profil', 'user', 'Profil'], ['apparence', 'sun', 'Apparence'], ['apropos', 'info', 'À propos']];
+  const nav = [['equipe', 'users', 'Équipe & synchronisation'], ['entreprise', 'landmark', 'Entreprise'], ['donnees', 'database', 'Données'], ['profil', 'user', 'Profil'], ['apparence', 'sun', 'Apparence'], ['apropos', 'info', 'À propos']];
   let corps = '';
   if (t === 'equipe') corps = vSynchro();
   if (t === 'donnees') corps = `<div class="card"><div class="card-head"><h3>Importer</h3></div>
@@ -596,6 +606,11 @@ function vParametres() {
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>Zone sensible</h3></div>
       <div class="set-row"><div class="s-txt"><b>Charger la démonstration</b><span>Ajoute le chantier du cas pratique CIGV.</span></div><button class="btn" data-act="demo">${icone('sparkles')}Ajouter la démo</button></div>
       <div class="set-row"><div class="s-txt"><b>Effacer les données de cet appareil</b><span>Les chantiers partagés restent en ligne et reviendront à la prochaine synchronisation.</span></div><button class="btn danger" data-act="toutEffacer">${icone('trash-2')}Effacer</button></div></div>`;
+  if (t === 'entreprise') {
+    const e = entreprise();
+    corps = `<div class="card"><div class="set-row"><div class="row"><span class="kpi-ico" style="width:44px;height:44px">${icone('landmark', 'lg')}</span><div class="s-txt"><b>${esc(e.nom || 'Non renseignée')}</b><span>${esc([String(e.adresse || '').replace(/\n/g, ', '), e.siret && 'SIRET ' + e.siret].filter(Boolean).join(' · ') || 'Raison sociale, adresse et SIRET')}</span></div></div><button class="btn" data-act="entreprise">${icone('pencil')}Modifier</button></div>
+      <div class="set-row"><div class="s-txt"><b>Utilisation</b><span>En-tête des situations de travaux transmises au maître d'œuvre et des bons de commande fournisseurs.</span></div></div></div>`;
+  }
   if (t === 'profil') corps = `<div class="card"><div class="set-row"><div class="row"><span class="avatar" style="width:44px;height:44px;font-size:15px">${initiales(nomUser())}</span><div class="s-txt"><b>${esc(nomUser() || 'Non renseigné')}</b><span>${esc(user && user.role || '')}</span></div></div><button class="btn" data-act="identite">${icone('pencil')}Modifier</button></div>
       <div class="set-row"><div class="s-txt"><b>Utilisation du nom</b><span>Votre nom est enregistré sur les tâches cochées, le journal, les réserves et les check-lists.</span></div></div></div>`;
   if (t === 'apparence') {
@@ -1126,6 +1141,7 @@ const ACT = {
     const d = construireDemo(lundi(aujourdHui()));
     db.chantiers.push(d.chantier); db.ops.push(...d.ops); db.suivi.push(...d.suivi); db.taches.push(...d.taches);
     db.journal.push(...d.journal); db.reserves.push(...d.reserves); Object.assign(db.checklists, d.checklists);
+    db.postes.push(...d.postes); db.situations.push(...d.situations); db.commandes.push(...d.commandes);
     ui.chantierId = d.chantier.id; ui.zone = null; ui.semaine = lundi(aujourdHui());
     save(); allerA('tableau'); toast('Démonstration chargée', 'succes');
   },
@@ -1191,7 +1207,7 @@ function insererOp(op) {
 
 function supprimerChantier(cid) {
   db.chantiers = db.chantiers.filter(c => c.id !== cid);
-  ['ops', 'suivi', 'taches', 'journal', 'reserves'].forEach(k => { db[k] = db[k].filter(x => x.chantierId !== cid); });
+  ['ops', 'suivi', 'taches', 'journal', 'reserves', 'postes', 'situations', 'commandes'].forEach(k => { db[k] = (db[k] || []).filter(x => x.chantierId !== cid); });
   delete db.checklists[cid];
   if (ui.chantierId === cid) ui.chantierId = db.chantiers[0] ? db.chantiers[0].id : null;
 }

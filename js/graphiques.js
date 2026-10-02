@@ -194,3 +194,52 @@ function svgEnPng(svg, largeur, hauteur, echelle = 2) {
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   });
 }
+
+// Courbes mensuelles cumulées en euros (ex. facturation vs dépenses)
+function courbesMensuelles(pts, series, largeur, opts = {}) {
+  const P = opts.impression ? PALETTE_IMPRESSION : PALETTE_ECRAN;
+  const W = Math.max(300, largeur), H = opts.hauteur || 250;
+  const m = { g: 58, d: 104, h: 14, b: 30 };
+  const iw = W - m.g - m.d, ih = H - m.h - m.b;
+  const n = pts.length;
+  const max = Math.max(1, ...pts.flatMap(p => series.map(s => p[s.cle])));
+  const pas = Math.pow(10, Math.floor(Math.log10(max)));
+  const haut = Math.ceil(max / pas) * pas;
+  const x = i => m.g + (n <= 1 ? iw / 2 : i * iw / (n - 1));
+  const y = v => m.h + ih - v / haut * ih;
+  const mois = s => new Date(s + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' });
+  const coul = { s1: P.serie1, s2: P.serie2 };
+  const id = 'f' + Math.random().toString(36).slice(2, 7);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" font-family="${P.police}" role="img" aria-label="Évolution mensuelle cumulée">`;
+  [0, .25, .5, .75, 1].forEach(f => {
+    s += `<line x1="${m.g}" x2="${m.g + iw}" y1="${y(haut * f)}" y2="${y(haut * f)}" stroke="${f === 0 ? P.base : P.grille}" stroke-width="1"/>`;
+    s += `<text x="${m.g - 8}" y="${y(haut * f) + 4}" text-anchor="end" font-size="11" fill="${P.texte}">${esc(fmtCompact(haut * f))} €</text>`;
+  });
+  const saut = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(iw / 64))));
+  pts.forEach((p, i) => { if (i % saut === 0 || i === n - 1) s += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" font-size="11" fill="${P.texte}">${esc(mois(p.mois))}</text>`; });
+  const fins = [];
+  series.forEach(se => {
+    const q = pts.map((p, i) => [x(i), y(p[se.cle])]);
+    const c = coul[se.couleur];
+    if (q.length > 1) s += `<path d="M${q.map(v => v.join(',')).join('L')}" fill="none" stroke="${c}" stroke-width="2" ${se.tirets ? 'stroke-dasharray="6 4"' : ''} stroke-linejoin="round" stroke-linecap="round"/>`;
+    const d = q[q.length - 1];
+    fins.push({ q: d, c, txt: `${se.lib} ${fmtCompact(pts[n - 1][se.cle])} €` });
+  });
+  if (fins.length === 2 && Math.abs(fins[0].q[1] - fins[1].q[1]) < 16) {
+    const [a, b] = fins[0].q[1] < fins[1].q[1] ? [fins[0], fins[1]] : [fins[1], fins[0]];
+    a.ly = a.q[1] - 8; b.ly = b.q[1] + 8;
+  }
+  fins.forEach(f => {
+    s += `<circle cx="${f.q[0]}" cy="${f.q[1]}" r="5" fill="${f.c}" stroke="${P.surface}" stroke-width="2"/>`;
+    s += `<text x="${f.q[0] + 10}" y="${(f.ly ?? f.q[1]) + 4}" font-size="11.5" font-weight="600" fill="${P.texteFort}">${esc(f.txt)}</text>`;
+  });
+  if (!opts.impression) {
+    s += `<line id="${id}x" x1="0" x2="0" y1="${m.h}" y2="${m.h + ih}" stroke="${P.base}" stroke-width="1" visibility="hidden"/>`;
+    const lw = n <= 1 ? iw : iw / (n - 1);
+    pts.forEach((p, i) => {
+      const tip = { h: new Date(p.mois + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }), r: series.map(se => [se.lib, fmtE(p[se.cle]), se.couleur === 's1' ? 'serie-1' : 'serie-2']) };
+      s += `<rect x="${x(i) - lw / 2}" y="${m.h}" width="${lw}" height="${ih}" fill="transparent" data-tip='${esc(JSON.stringify(tip))}' data-cross="${id}x" data-cx="${x(i)}"/>`;
+    });
+  }
+  return s + '</svg>';
+}

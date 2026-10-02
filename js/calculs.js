@@ -104,3 +104,130 @@ function parseCSV(txt) {
   return rows.filter(r => r.some(c => String(c).trim() !== ''));
 }
 
+
+/* ============================ Gestion financière ============================ */
+const CATEGORIES_ACHAT = ['Matériaux', 'Sous-traitance', 'Matériel', 'Divers'];
+const CLE_BUDGET = { 'Matériaux': 'materiaux', 'Sous-traitance': 'soustraitance', 'Matériel': 'materiel', 'Divers': 'divers' };
+const STATUTS_COMMANDE = [
+  ['brouillon', 'À commander'], ['commandee', 'Commandée'], ['confirmee', 'Confirmée (AR)'],
+  ['partielle', 'Livrée partiellement'], ['livree', 'Livrée'], ['facturee', 'Facturée'], ['annulee', 'Annulée']
+];
+const STATUTS_SITUATION = [
+  ['brouillon', 'Brouillon'], ['transmise', 'Transmise MOE'], ['validee', 'Validée MOE'], ['facturee', 'Facturée'], ['payee', 'Payée']
+];
+const commandeEngagee = cmd => !['brouillon', 'annulee'].includes(cmd.statut);
+const commandeLivree = cmd => ['livree', 'facturee'].includes(cmd.statut);
+
+function montantCommande(cmd) {
+  return (cmd.lignes || []).reduce((t, l) => t + num(l.quantite) * num(l.pu), 0);
+}
+
+function parametresFinanciers(c) {
+  const f = (c && c.finances) || {};
+  return { rg: f.rg ?? 5, prorata: f.prorata ?? 0, tva: f.tva ?? 20 };
+}
+
+// Décomposition du marché (DPGF + avenants). Sans postes saisis : une ligne unique « Marché ».
+function postesDe(base, cid) {
+  const c = base.chantiers.find(x => x.id === cid);
+  const p = (base.postes || []).filter(x => x.chantierId === cid)
+    .sort((a, b) => (a.avenant ? 1 : 0) - (b.avenant ? 1 : 0) || String(a.code || '').localeCompare(String(b.code || ''), 'fr', { numeric: true }));
+  if (p.length) return p;
+  return num(c && c.marcheHT) ? [{ id: '__marche', chantierId: cid, code: '01', designation: 'Marché de base', montant: num(c.marcheHT), avenant: false }] : [];
+}
+
+function situationsDe(base, cid) {
+  return (base.situations || []).filter(s => s.chantierId === cid)
+    .sort((a, b) => a.mois.localeCompare(b.mois) || num(a.numero) - num(b.numero));
+}
+
+/* Situation de travaux : cumul = % cumulé × montant du poste ; montant du mois = cumul − cumul précédent.
+   Retenue de garantie et compte prorata appliqués au montant HT du mois, puis TVA. */
+function calcSituation(base, cid, sitId) {
+  const c = base.chantiers.find(x => x.id === cid);
+  const sits = situationsDe(base, cid);
+  const i = sits.findIndex(s => s.id === sitId);
+  const sit = sits[i];
+  const prec = i > 0 ? sits[i - 1] : null;
+  const pf = parametresFinanciers(c);
+  const lignes = postesDe(base, cid).map(p => {
+    const pct = num((sit && sit.pcts || {})[p.id]);
+    const pctPrec = prec ? num((prec.pcts || {})[p.id]) : 0;
+    const cumul = pct * num(p.montant), precedent = pctPrec * num(p.montant);
+    return { poste: p, pct, pctPrec, cumul, precedent, mois: cumul - precedent };
+  });
+  const t = lignes.reduce((a, l) => { a.montant += num(l.poste.montant); a.cumul += l.cumul; a.precedent += l.precedent; a.mois += l.mois; return a; }, { montant: 0, cumul: 0, precedent: 0, mois: 0 });
+  t.rg = t.mois * pf.rg / 100;
+  t.prorata = t.mois * pf.prorata / 100;
+  t.netHT = t.mois - t.rg - t.prorata;
+  t.tva = t.netHT * pf.tva / 100;
+  t.ttc = t.netHT + t.tva;
+  t.pct = t.montant ? t.cumul / t.montant : 0;
+  return { sit, prec, lignes, tot: t, pf };
+}
+
+/* Synthèse financière : chiffre d'affaires, facturation, déboursé budget / réel / fin d'affaire.
+   Prévision fin d'affaire (PFA) : main d'œuvre = budget − impact projeté du suivi hebdo ;
+   achats = le plus grand entre budget et engagé. */
+function calcFinances(base, cid) {
+  const c = base.chantiers.find(x => x.id === cid);
+  const postes = postesDe(base, cid);
+  const marcheBase = postes.filter(p => !p.avenant).reduce((t, p) => t + num(p.montant), 0);
+  const avenants = postes.filter(p => p.avenant).reduce((t, p) => t + num(p.montant), 0);
+  const ca = marcheBase + avenants;
+  const sits = situationsDe(base, cid);
+  const emises = sits.filter(s => s.statut !== 'brouillon');
+  const derniere = emises[emises.length - 1];
+  const facture = derniere ? calcSituation(base, cid, derniere.id).tot.cumul : 0;
+  let encaisseTTC = 0, factureTTC = 0, rgCumul = 0;
+  emises.forEach(s => {
+    const t = calcSituation(base, cid, s.id).tot;
+    factureTTC += t.ttc; rgCumul += t.rg;
+    if (s.statut === 'payee') encaisseTTC += t.ttc;
+  });
+  const suivi = calcSuivi(base, cid);
+  const taux = suivi.taux;
+  const b = (c && c.budget) || {};
+  const budget = { mo: suivi.tot.budget * taux };
+  CATEGORIES_ACHAT.forEach(cat => { budget[CLE_BUDGET[cat]] = num(b[CLE_BUDGET[cat]]); });
+  const cmds = (base.commandes || []).filter(x => x.chantierId === cid && commandeEngagee(x));
+  const reel = { mo: suivi.tot.heures * taux };
+  CATEGORIES_ACHAT.forEach(cat => { reel[CLE_BUDGET[cat]] = cmds.filter(x => (x.categorie || 'Matériaux') === cat).reduce((t, x) => t + montantCommande(x), 0); });
+  const pfa = { mo: suivi.tot.heures > 0 ? Math.max(reel.mo, budget.mo - suivi.tot.impactProj) : budget.mo };
+  CATEGORIES_ACHAT.forEach(cat => { const k = CLE_BUDGET[cat]; pfa[k] = Math.max(budget[k], reel[k]); });
+  const somme = o => Object.values(o).reduce((t, v) => t + v, 0);
+  budget.total = somme(budget); reel.total = somme(reel); pfa.total = somme(pfa);
+  const margePrevue = ca - budget.total, margePFA = ca - pfa.total;
+  return {
+    ca, marcheBase, avenants, facture, factureTTC, encaisseTTC, resteAEncaisser: factureTTC - encaisseTTC, rgCumul,
+    budget, reel, pfa, margePrevue, margePFA,
+    tauxMargePrevue: ca ? margePrevue / ca : 0, tauxMargePFA: ca ? margePFA / ca : 0,
+    avPhysique: suivi.tot.pct, avFinancier: ca ? facture / ca : 0
+  };
+}
+
+// Séries mensuelles cumulées : facturation (situations émises) et dépenses (MO pointée + achats engagés)
+function serieFinanciere(base, cid) {
+  const c = base.chantiers.find(x => x.id === cid);
+  if (!c) return [];
+  const taux = num(c.tauxHoraire);
+  const suivi = base.suivi.filter(s => s.chantierId === cid);
+  const cmds = (base.commandes || []).filter(x => x.chantierId === cid && commandeEngagee(x));
+  const sits = situationsDe(base, cid).filter(s => s.statut !== 'brouillon');
+  const dates = [c.dateDebut, ...suivi.map(s => s.semaine), ...cmds.map(x => x.date), ...sits.map(s => s.mois + '-01')].filter(Boolean).sort();
+  if (!dates.length) return [];
+  const fin = [aujourdHui(), c.dateFin || ''].sort().pop();
+  const pts = [];
+  let m = dates[0].slice(0, 7);
+  const mFin = (fin > aujourdHui() ? aujourdHui() : fin).slice(0, 7);
+  for (let i = 0; m <= mFin && i < 60; i++) {
+    const finMois = m + '-31';
+    const mo = suivi.filter(s => s.semaine <= finMois).reduce((t, s) => t + num(s.heures), 0) * taux;
+    const achats = cmds.filter(x => (x.date || '') <= finMois).reduce((t, x) => t + montantCommande(x), 0);
+    const sit = sits.filter(s => s.mois <= m).pop();
+    pts.push({ mois: m, depenses: mo + achats, facture: sit ? calcSituation(base, cid, sit.id).tot.cumul : 0 });
+    const [a, mm] = m.split('-').map(Number);
+    m = mm === 12 ? `${a + 1}-01` : `${a}-${String(mm + 1).padStart(2, '0')}`;
+  }
+  return pts;
+}

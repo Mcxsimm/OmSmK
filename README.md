@@ -21,8 +21,16 @@ jamais portée par la couleur seule (légende, pointillés, étiquettes directes
 | 🧮 **BTE** | Opérations par complexe / ouvrage et phase : métré, cadence (u/j/homme), heures, budget MO, devis, écarts. Bibliothèque des **cadences standard** (simulateurs Étanchéité V10 et Façades V8) avec coefficient chantier. Durée indicative selon la taille de l'équipe. |
 | 📒 **Journal** | Effectif, météo, heures, travaux et événements. Déclaration d'**intempérie** avec la liste des bonnes pratiques à vérifier avant de s'arrêter. |
 | 🛡️ **Qualité** | Réserves / OPR (origine, responsable, échéance, levée), **check-list CDT** (20 points, 6 temps forts) et contrôle qualité de fin de chantier. |
+| 💶 **Synthèse financière** | Chiffre d'affaires (marché + avenants), facturé et encaissé, déboursé par poste (main d'œuvre, matériaux, sous-traitance, matériel, divers) : budget BTE / réel ou engagé / fin d'affaire, marge prévue vs marge fin d'affaire, courbe facturation vs dépenses, alerte de retard de facturation. |
+| 🧾 **Situations mensuelles** | Décomposition du marché (DPGF, import CSV / Excel) et avenants ; situation de travaux mensuelle par poste (% cumulé, montant du mois, retenue de garantie, compte prorata, TVA), circuit brouillon → transmise MOE → validée → facturée → payée, PDF à transmettre au maître d'œuvre. |
+| 🛒 **Commandes & achats** | Commandes fournisseurs avec lignes (catalogue matériaux importé du BTE), statut jusqu'à la livraison et la facture, retards de livraison, engagé vs budget achats, bon de commande PDF. |
 | 💼 **Portefeuille** | Tous les chantiers avec avancement, écarts, impact projeté et réserves ; totaux consolidés. |
 | ⚙️ **Paramètres** | Fiche chantier, synchronisation en ligne (équipes, partage), imports, exports Excel / PDF, sauvegarde et restauration JSON, démo. |
+
+### Calculs financiers
+- Situation : cumul = % cumulé × montant du poste ; montant du mois = cumul − cumul de la situation précédente ; retenue de garantie et compte prorata sur le HT du mois, puis TVA
+- Fin d'affaire : main d'œuvre = budget − impact projeté du suivi hebdomadaire ; achats = le plus élevé entre budget et engagé ; marge = CA − déboursé
+- L'en-tête des documents (raison sociale, adresse, SIRET) se règle dans Paramètres → Entreprise
 
 ### Calculs (identiques au fichier de suivi standard SMAC)
 - Heures budgétées d'une opération = métré ÷ cadence × heures par jour (ou heures au forfait)
@@ -77,7 +85,8 @@ js/config.js          Adresse et clé publique du projet Supabase
 js/ui.js              Briques d'interface : formats, icônes, notifications, boîtes de dialogue
 js/graphiques.js      Graphiques SVG (courbe d'avancement, écarts par phase)
 js/app.js             État, vues et actions
-js/donnees.js         Imports, exports Excel, rapport PDF, QR codes
+js/finances.js        Synthèse financière, situations mensuelles, commandes
+js/donnees.js         Imports, exports Excel, rapport PDF, situation et bon de commande PDF, QR codes
 js/demarrage.js       Événements et démarrage
 js/icones.js          Icônes Lucide (sous-ensemble)
 js/demo.js            Données de démonstration (cas pratique CIGV)

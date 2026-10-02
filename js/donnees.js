@@ -230,6 +230,15 @@ function exporterExcel() {
     ['TOTAL', '', +s.tot.budget.toFixed(2), +s.tot.pct.toFixed(3), s.tot.heures, +s.tot.ecartH.toFixed(2), +s.tot.impact.toFixed(2), +s.tot.ecartProj.toFixed(2), +s.tot.impactProj.toFixed(2)]]);
   add('Suivi hebdo', [['Semaine (lundi)', 'N° semaine', 'Ouvrage', 'Phase', '% cumulé', 'Heures pointées'],
     ...deCh(db.suivi).sort((a, b) => a.semaine.localeCompare(b.semaine)).map(e => [e.semaine, semISO(e.semaine), e.ouvrage, e.phase, e.pct ?? '', num(e.heures)])]);
+  const nomK = id => { const k = (db.compagnons || []).find(x => x.id === id); return k ? [`${k.prenom || ''} ${k.nom || ''}`.trim(), k.qualification || '', k.matricule || ''] : ['', '', '']; };
+  const libSt = st => (STATUTS_POINTAGE.find(x => x[0] === st) || [st, st])[1];
+  add('Pointages', [['Date', 'N° semaine', 'Compagnon', 'Qualification', 'Matricule', 'Statut', 'Ouvrage', 'Phase', 'Heures', 'Intempéries h', 'Panier', 'Observation'],
+    ...pointagesDe(db, c.id).flatMap(p => {
+      const base = [p.date, semISO(p.date), ...nomK(p.compagnonId), libSt(p.statut)];
+      const fin = (i) => i === 0 ? [num(p.intemp), p.panier ? 1 : 0, p.obs || ''] : [0, 0, ''];
+      const lignes = p.statut === 'present' && (p.lignes || []).length ? p.lignes : [{ ouvrage: '', phase: '', h: 0 }];
+      return lignes.map((l, i) => [...base, l.ouvrage, l.phase, num(l.h), ...fin(i)]);
+    })]);
   add('Terrain', [['Chantier', 'Zone', 'Lot', 'Tache', 'Fait', 'Fait le', 'Par', 'Observation', 'Non prévu'],
     ...deCh(db.taches).map(t => [c.nom, t.zone, t.lot, t.tache, estFait(t.fait) ? 'VRAI' : 'FAUX', t.faitLe, t.faitPar, t.obs, t.ajout ? 'oui' : ''])]);
   add('Journal', [['Date', 'Météo', 'Effectif', 'Heures', 'Intempérie', 'Cause', 'Texte', 'Auteur'],
@@ -615,4 +624,82 @@ function bonCommandePDF(cmdId) {
   piedDocument(doc, `${entreprise().nom || 'OmSmK'}  ·  ${c.nom}  ·  Commande ${x.numero}`);
   doc.save(`Commande_${String(x.numero).replace(/[^\w-]+/g, '_')}.pdf`);
   toast(`Bon de commande ${x.numero} généré`, 'succes');
+}
+
+
+/* ===================== Relevé d'heures hebdomadaire (PDF) ===================== */
+function releveHeuresPDF(lun) {
+  const c = ch();
+  if (!globalThis.jspdf) return toast('Bibliothèque PDF non chargée.', 'erreur');
+  const { jsPDF } = globalThis.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const jours = Array.from({ length: 7 }, (_, i) => addDays(lun, i));
+  const syn = synthesePointage(db, c.id, lun, addDays(lun, 6));
+  const visibles = syn.pointages.some(p => p.date >= jours[5]) ? jours : jours.slice(0, 5);
+  const pointes = new Set(syn.pointages.map(p => p.compagnonId));
+  const comps = compagnonsDe(c.id, true).filter(k => k.actif !== false || pointes.has(k.id));
+  let y = enTeteDocument(doc, 'RELEVÉ D\'HEURES', `Semaine ${semISO(lun)} — du ${fmtDate(lun)} au ${fmtDate(addDays(lun, 6))}`,
+    [`Établi le ${fmtDate(aujourdHui())}`, `${fmt(hjDe(c))} h par jour`]);
+  const h1 = cadre(doc, 14, y, 88, 'Chantier', [c.nom, c.adresse || '', c.imputation ? `Imputation ${c.imputation}` : ''].filter(Boolean));
+  const h2 = cadre(doc, 108, y, 88, 'Encadrement', [c.conducteur ? `Conducteur de travaux : ${c.conducteur}` : 'Conducteur de travaux : —', c.chef ? `Chef de chantier : ${c.chef}` : ''].filter(Boolean));
+  y += Math.max(h1, h2) + 7;
+  const code = st => (STATUTS_POINTAGE.find(s => s[0] === st) || [])[2] || '';
+  const lib = d => new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }).replace('.', '');
+  const corps = comps.map(k => {
+    const pk = syn.parCompagnon[k.id] || { heures: 0, intemp: 0, paniers: 0 };
+    return [nomCompagnon(k), k.qualification || '', ...visibles.map(d => {
+      const p = syn.pointages.find(x => x.date === d && x.compagnonId === k.id);
+      if (!p) return '';
+      if (p.statut !== 'present') return code(p.statut) + (num(p.intemp) ? ` ${fmt(num(p.intemp))}` : '');
+      return fmt(heuresPointage(p)) + (num(p.intemp) ? ` +${fmt(num(p.intemp))}I` : '');
+    }), fmt(pk.heures), pk.intemp ? fmt(pk.intemp) : '', pk.paniers || ''].map(pdfTxt);
+  });
+  const totJour = d => syn.pointages.filter(p => p.date === d).reduce((t, p) => t + heuresPointage(p), 0);
+  corps.push(['Total', '', ...visibles.map(d => totJour(d) ? fmt(totJour(d)) : ''), fmt(syn.tot.heures), syn.tot.intemp ? fmt(syn.tot.intemp) : '', syn.tot.paniers || ''].map(pdfTxt));
+  const nb = visibles.length;
+  const colonnes = { 0: { cellWidth: 38 }, 1: { cellWidth: 26, textColor: [102, 112, 133] } };
+  for (let i = 0; i < nb + 3; i++) colonnes[i + 2] = { halign: 'right' };
+  colonnes[nb + 2].fontStyle = 'bold';
+  doc.autoTable(Object.assign({}, STYLE_TABLE, {
+    startY: y,
+    head: [['Compagnon', 'Qualification', ...visibles.map(lib), 'Heures', 'Intemp.', 'Paniers'].map(pdfTxt)],
+    body: corps, columnStyles: colonnes,
+    didParseCell: d => { if (d.section === 'body' && d.row.index === corps.length - 1) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [244, 246, 249]; } }
+  }));
+  y = doc.lastAutoTable.finalY + 4;
+  doc.setFontSize(7.5); doc.setTextColor(102, 112, 133);
+  doc.text(pdfTxt('P présent · I intempéries · CP congés · M maladie · F formation · A absent. « +xI » : heures d\'intempéries en plus des heures travaillées.'), 14, y + 2);
+  y += 10;
+  if (syn.parPhase.length) {
+    doc.autoTable(Object.assign({}, STYLE_TABLE, {
+      startY: y,
+      head: [['Ventilation par phase du BTE', 'Heures', 'Jours-homme'].map(pdfTxt)],
+      body: syn.parPhase.map(p => [p.phase ? `${p.phase}${p.ouvrage ? ' - ' + p.ouvrage : ''}` : 'Non ventilé', fmt(p.heures), fmt(p.heures / hjDe(c), 1)].map(pdfTxt)),
+      columnStyles: { 1: { halign: 'right', cellWidth: 30 }, 2: { halign: 'right', cellWidth: 30 } }
+    }));
+    y = doc.lastAutoTable.finalY + 10;
+  }
+  const obs = syn.pointages.filter(p => p.obs);
+  if (obs.length) {
+    if (y > 240) { doc.addPage(); y = 20; }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(16, 24, 40); doc.text(pdfTxt('Observations'), 14, y); y += 5;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(71, 84, 103);
+    obs.forEach(p => {
+      const k = (db.compagnons || []).find(x => x.id === p.compagnonId);
+      const l = doc.splitTextToSize(pdfTxt(`${fmtDate(p.date)} - ${k ? nomCompagnon(k) : ''} : ${p.obs}`), 182);
+      doc.text(l, 14, y); y += l.length * 4.2;
+    });
+    y += 6;
+  }
+  if (y > 250) { doc.addPage(); y = 20; }
+  [['Chef de chantier', c.chef || ''], ['Conducteur de travaux', c.conducteur || '']].forEach(([t, n], i) => {
+    const x = 14 + i * 94;
+    doc.setDrawColor(205, 212, 222); doc.roundedRect(x, y, 88, 26, 1.5, 1.5);
+    doc.setFontSize(7.5); doc.setTextColor(102, 112, 133); doc.text(pdfTxt(t.toUpperCase()), x + 3, y + 5);
+    if (n) { doc.setFontSize(8.5); doc.setTextColor(16, 24, 40); doc.text(pdfTxt(n), x + 3, y + 10); }
+    doc.setFontSize(7); doc.setTextColor(152, 162, 179); doc.text(pdfTxt('Date et signature'), x + 3, y + 23);
+  });
+  piedDocument(doc, `${entreprise().nom || 'OmSmK'}  ·  ${c.nom}  ·  Relevé d'heures S${semISO(lun)}`);
+  doc.save(`Releve_heures_S${String(semISO(lun)).padStart(2, '0')}_${lun.slice(0, 4)}_${c.nom.replace(/[^\w-]+/g, '_')}.pdf`);
+  toast(`Relevé de la semaine ${semISO(lun)} généré`, 'succes');
 }

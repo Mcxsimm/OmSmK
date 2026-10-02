@@ -9,7 +9,7 @@ function baseCIGV() {
   const d = C.construireDemo('2026-09-28');
   const s1 = '2026-09-21';
   const suivi = d.suivi.filter(s => s.semaine === s1 || s.phase === 'Pare-vapeur');
-  return { chantiers: [d.chantier], ops: d.ops, suivi, taches: d.taches, journal: [], reserves: [], checklists: {}, cid: d.chantier.id };
+  return { chantiers: [d.chantier], ops: d.ops, suivi, pointages: d.pointages, taches: d.taches, journal: [], reserves: [], checklists: {}, cid: d.chantier.id };
 }
 
 Deno.test('heures d\'une opération : métré / cadence x heures par jour, sinon forfait', () => {

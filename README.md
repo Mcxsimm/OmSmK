@@ -16,8 +16,9 @@ jamais portée par la couleur seule (légende, pointillés, étiquettes directes
 | Onglet | Contenu |
 |---|---|
 | 📊 **Tableau de bord** | Courbe d'avancement réel vs prévu, écarts par phase, activité récente, avancement pondéré, heures budgétées / pointées, écart d'heures à date et projeté (h et €), indice de productivité, avancement terrain, réserves, intempéries, alertes automatiques (dérives, réserves en retard, semaine non saisie). |
+| 🕒 **Pointage journalier** | Équipe du chantier (chef, compagnons, intérimaires), pointage de chaque compagnon chaque jour : statut (présent, intempéries, congés, maladie, formation, absent), heures **ventilées par phase du BTE** (plusieurs phases possibles), heures d'intempéries, panier. « Tous présents » et « Reprendre la veille » en un geste. Budget d'heures par phase (pointé / budget / % réalisé / reste). Relevé d'heures hebdomadaire PDF à signer, export Excel. Les heures pointées **alimentent automatiquement le suivi hebdo**, les écarts et la main d'œuvre réelle. |
 | ✅ **Terrain** | Saisie par zone (terrasse, façade, support, niveau…) : cochage des tâches horodaté avec le nom de l'opérateur, observations, « tout cocher », travaux non prévus, vue **matrice** zones × tâches, scan de **QR code** et étiquettes QR imprimables, récap du jour à copier dans WhatsApp / mail. |
-| 📈 **Suivi hebdo** | Saisie hebdomadaire du % cumulé et des heures pointées par ouvrage / phase, avec les mêmes formules que l'onglet « Étape 2 - Objectifs et suivi » du BTE SMAC. Le % peut être calculé à partir des quantités. Historique des semaines. |
+| 📈 **Suivi hebdo** | Saisie hebdomadaire du % cumulé par ouvrage / phase ; heures reprises du pointage journalier, avec une colonne d'ajout manuel (ou saisie des heures à la semaine sans pointage), avec les mêmes formules que l'onglet « Étape 2 - Objectifs et suivi » du BTE SMAC. Le % peut être calculé à partir des quantités. Historique des semaines. |
 | 🧮 **BTE** | Opérations par complexe / ouvrage et phase : métré, cadence (u/j/homme), heures, budget MO, devis, écarts. Bibliothèque des **cadences standard** (simulateurs Étanchéité V10 et Façades V8) avec coefficient chantier. Durée indicative selon la taille de l'équipe. |
 | 📒 **Journal** | Effectif, météo, heures, travaux et événements. Déclaration d'**intempérie** avec la liste des bonnes pratiques à vérifier avant de s'arrêter. |
 | 🛡️ **Qualité** | Réserves / OPR (origine, responsable, échéance, levée), **check-list CDT** (20 points, 6 temps forts) et contrôle qualité de fin de chantier. |
@@ -37,6 +38,8 @@ jamais portée par la couleur seule (légende, pointillés, étiquettes directes
 - Écart d'heures à date = heures budgétées × % réalisé − heures pointées (positif = gain)
 - Impact € = écart d'heures × taux horaire de l'équipe
 - Écart projeté = écart d'heures ÷ % réalisé (le total est calculé comme écart total ÷ avancement global)
+
+- Heures pointées d'une semaine et d'une phase = somme des pointages journaliers (compagnons présents) + heures saisies manuellement dans le suivi ; les heures non ventilées ou hors BTE comptent dans la main d'œuvre réelle, pas dans l'avancement
 
 Contrôlé sur le cas pratique CIGV : 133,5 h budgétées, +1,86 h / +55,75 € à date, +4,36 h / +130,90 € projetés.
 
@@ -86,7 +89,8 @@ js/ui.js              Briques d'interface : formats, icônes, notifications, bo�
 js/graphiques.js      Graphiques SVG (courbe d'avancement, écarts par phase)
 js/app.js             État, vues et actions
 js/finances.js        Synthèse financière, situations mensuelles, commandes
-js/donnees.js         Imports, exports Excel, rapport PDF, situation et bon de commande PDF, QR codes
+js/pointage.js        Pointage journalier des compagnons, budget d'heures, relevé hebdomadaire
+js/donnees.js         Imports, exports Excel, rapport PDF, situation, bon de commande et relevé d'heures PDF, QR codes
 js/demarrage.js       Événements et démarrage
 js/icones.js          Icônes Lucide (sous-ensemble)
 js/demo.js            Données de démonstration (cas pratique CIGV)

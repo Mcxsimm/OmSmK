@@ -1,1 +1,49 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>OmSmK – Suivi de chantier</title>
+  <meta name="description" content="Suivi de gros chantiers : BTE, avancement par phase, saisie terrain, journal, réserves.">
+  <meta name="theme-color" content="#1e3a5f">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
 
+  <!-- Bibliothèques embarquées (fonctionnent hors-ligne) -->
+  <script src="vendor/xlsx.full.min.js" defer></script>
+  <script src="vendor/jspdf.umd.min.js" defer></script>
+  <script src="vendor/jspdf.plugin.autotable.min.js" defer></script>
+  <script src="vendor/qrcode.min.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-row">
+      <div class="brand">Om<span>Sm</span>K</div>
+      <select id="chantierSelect" class="chantier-select" aria-label="Chantier actif"></select>
+      <span id="netDot" class="net-dot" title="En ligne"></span>
+      <button id="userChip" class="user-chip" title="Changer d'utilisateur">👤</button>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab" data-view="tableau">📊 Tableau de bord</button>
+      <button class="tab" data-view="terrain">✅ Terrain</button>
+      <button class="tab" data-view="suivi">📈 Suivi hebdo</button>
+      <button class="tab" data-view="bte">🧮 BTE</button>
+      <button class="tab" data-view="journal">📒 Journal</button>
+      <button class="tab" data-view="qualite">🛡️ Qualité</button>
+      <button class="tab" data-view="chantiers">⚙️ Chantiers & données</button>
+    </nav>
+  </header>
+
+  <main id="view"></main>
+
+  <div id="modalRoot"></div>
+  <div id="printArea" class="hidden"></div>
+  <div id="toast"></div>
+
+  <script src="js/referentiel.js"></script>
+  <script src="js/demo.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

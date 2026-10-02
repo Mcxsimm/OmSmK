@@ -1,0 +1,8 @@
+{
+  "lint": {
+    "exclude": ["vendor/"]
+  },
+  "test": {
+    "include": ["tests/"]
+  }
+}

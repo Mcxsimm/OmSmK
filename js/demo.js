@@ -4,6 +4,7 @@
    toiture terrasse béton du bâtiment A, R+7. 410 m² / 96 mL.
    ========================================================================== */
 
+// deno-lint-ignore no-unused-vars
 function construireDemo(lundiCourant) {
   const id = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const addDays = (s, n) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + n); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };

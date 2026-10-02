@@ -5,6 +5,7 @@
    de cadences Étanchéité V10 / Façades V8, check-list CDT, GT#3 intempéries).
    ========================================================================== */
 
+// deno-lint-ignore no-unused-vars
 const REFERENTIEL = {
   heuresJourDefaut: 7.5,
   tauxHoraireDefaut: 32.5,

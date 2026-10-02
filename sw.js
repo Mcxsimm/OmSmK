@@ -1,9 +1,11 @@
 /* Service worker OmSmK : application utilisable hors-ligne sur chantier */
-const CACHE = 'omsmk-v2';
+const CACHE = 'omsmk-v3';
 const SHELL = [
   './', './index.html', './manifest.json', './css/app.css',
-  './js/config.js', './js/referentiel.js', './js/calculs.js', './js/synchro.js', './js/demo.js', './js/app.js',
+  './js/config.js', './js/icones.js', './js/referentiel.js', './js/calculs.js', './js/synchro.js', './js/demo.js',
+  './js/ui.js', './js/graphiques.js', './js/app.js', './js/donnees.js', './js/demarrage.js',
   './icons/icon-192.png', './icons/icon-512.png',
+  './vendor/fonts/inter-latin-wght-normal.woff2', './vendor/fonts/inter-latin-ext-wght-normal.woff2',
   './vendor/xlsx.full.min.js', './vendor/jspdf.umd.min.js', './vendor/jspdf.plugin.autotable.min.js', './vendor/qrcode.min.js', './vendor/supabase.js'
 ];
 

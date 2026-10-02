@@ -5,17 +5,24 @@ Application web (PWA) de pilotage de gros chantiers d'**étanchéité** et de **
 Excellence Opérationnelle SMAC : BTE standard, cadences cibles, suivi hebdomadaire par phase, check-list du conducteur de travaux.
 Elle fonctionne **hors-ligne** sur smartphone, tablette ou PC, sans serveur ni compte.
 
+## Interface
+Navigation latérale (pilotage, terrain, organisation), sélecteur de chantier avec recherche, navigation basse sur mobile,
+thème clair / sombre, graphiques interactifs (courbe d'avancement réel vs prévu, écarts d'heures par phase), vue portefeuille
+multi-chantiers et rapport PDF mis en page. Palette des graphiques validée pour les daltoniens ; l'identité des séries n'est
+jamais portée par la couleur seule (légende, pointillés, étiquettes directes).
+
 ## Fonctionnalités
 
 | Onglet | Contenu |
 |---|---|
-| 📊 **Tableau de bord** | Avancement pondéré, heures budgétées / pointées, écart d'heures à date et projeté (h et €), indice de productivité, avancement terrain, réserves, intempéries, alertes automatiques (dérives, réserves en retard, semaine non saisie). |
+| 📊 **Tableau de bord** | Courbe d'avancement réel vs prévu, écarts par phase, activité récente, avancement pondéré, heures budgétées / pointées, écart d'heures à date et projeté (h et €), indice de productivité, avancement terrain, réserves, intempéries, alertes automatiques (dérives, réserves en retard, semaine non saisie). |
 | ✅ **Terrain** | Saisie par zone (terrasse, façade, support, niveau…) : cochage des tâches horodaté avec le nom de l'opérateur, observations, « tout cocher », travaux non prévus, vue **matrice** zones × tâches, scan de **QR code** et étiquettes QR imprimables, récap du jour à copier dans WhatsApp / mail. |
 | 📈 **Suivi hebdo** | Saisie hebdomadaire du % cumulé et des heures pointées par ouvrage / phase, avec les mêmes formules que l'onglet « Étape 2 - Objectifs et suivi » du BTE SMAC. Le % peut être calculé à partir des quantités. Historique des semaines. |
 | 🧮 **BTE** | Opérations par complexe / ouvrage et phase : métré, cadence (u/j/homme), heures, budget MO, devis, écarts. Bibliothèque des **cadences standard** (simulateurs Étanchéité V10 et Façades V8) avec coefficient chantier. Durée indicative selon la taille de l'équipe. |
 | 📒 **Journal** | Effectif, météo, heures, travaux et événements. Déclaration d'**intempérie** avec la liste des bonnes pratiques à vérifier avant de s'arrêter. |
 | 🛡️ **Qualité** | Réserves / OPR (origine, responsable, échéance, levée), **check-list CDT** (20 points, 6 temps forts) et contrôle qualité de fin de chantier. |
-| ⚙️ **Chantiers & données** | Fiche chantier, synchronisation en ligne (équipes, partage), imports, exports Excel / PDF, sauvegarde et restauration JSON, démo. |
+| 💼 **Portefeuille** | Tous les chantiers avec avancement, écarts, impact projeté et réserves ; totaux consolidés. |
+| ⚙️ **Paramètres** | Fiche chantier, synchronisation en ligne (équipes, partage), imports, exports Excel / PDF, sauvegarde et restauration JSON, démo. |
 
 ### Calculs (identiques au fichier de suivi standard SMAC)
 - Heures budgétées d'une opération = métré ÷ cadence × heures par jour (ou heures au forfait)
@@ -67,10 +74,15 @@ js/referentiel.js     Référentiel métier : phases, opérations, cadences, che
 js/calculs.js         Calculs métier purs (BTE, suivi, terrain, CSV)
 js/synchro.js         Synchronisation en ligne (Supabase)
 js/config.js          Adresse et clé publique du projet Supabase
-js/app.js             Logique, vues, imports / exports
+js/ui.js              Briques d'interface : formats, icônes, notifications, boîtes de dialogue
+js/graphiques.js      Graphiques SVG (courbe d'avancement, écarts par phase)
+js/app.js             État, vues et actions
+js/donnees.js         Imports, exports Excel, rapport PDF, QR codes
+js/demarrage.js       Événements et démarrage
+js/icones.js          Icônes Lucide (sous-ensemble)
 js/demo.js            Données de démonstration (cas pratique CIGV)
 sw.js                 Service worker (hors-ligne)
-vendor/               SheetJS (Apache-2.0), jsPDF + AutoTable (MIT), qrcodejs (MIT), supabase-js (MIT)
+vendor/               SheetJS (Apache-2.0), jsPDF + AutoTable (MIT), qrcodejs (MIT), supabase-js (MIT), police Inter (OFL)
 supabase/migrations/  Schéma de la base en ligne
 tests/                Tests automatisés (Deno)
 exemples/             Fichier d'exemple d'import terrain

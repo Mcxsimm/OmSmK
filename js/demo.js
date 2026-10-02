@@ -40,15 +40,34 @@ function construireDemo(lundiCourant) {
     metre: l[4], unite: l[5], cadence: l[6], heuresForfait: l[7], devis: l[8]
   }));
 
-  // Suivi hebdo issu du cas pratique (semaine 1 et 2)
+  // Suivi hebdo issu du cas pratique (semaine 1 et 2).
+  // Semaine 1 : heures issues du pointage journalier ci-dessous (7,5 + 15 + 22,5 h) ; semaine 2 : saisies à la semaine.
   const suivi = [
-    [s1, 'Installation / Appro', 1, 7.5],
-    [s1, 'Pare-vapeur', 0.75, 15],
-    [s1, "Hors d'eau", 0.4, 22.5],
+    [s1, 'Installation / Appro', 1, 0],
+    [s1, 'Pare-vapeur', 0.75, 0],
+    [s1, "Hors d'eau", 0.4, 0],
     [s2, 'Pare-vapeur', 1, 10],
     [s2, "Hors d'eau", 1, 22.5],
     [s2, '2nd couche et relevés', 0.4, 7.5]
   ].map(s => ({ id: id(), chantierId: cid, semaine: s[0], ouvrage: 'Toiture A', phase: s[1], pct: s[2], heures: s[3] }));
+
+  // Pointage journalier de la semaine 1 : un chef d'équipe et un compagnon
+  const compagnons = [
+    { id: id(), chantierId: cid, prenom: 'Karim', nom: 'Benali', qualification: 'Chef d\'équipe', matricule: '1042', interim: '', actif: true },
+    { id: id(), chantierId: cid, prenom: 'Lucas', nom: 'Morel', qualification: 'Compagnon', matricule: '1187', interim: '', actif: true }
+  ];
+  const [K, L] = compagnons.map(k => k.id);
+  const pv = ['Toiture A', 'Pare-vapeur'], he = ['Toiture A', "Hors d'eau"], inst = ['Toiture A', 'Installation / Appro'];
+  const present = (j, kid, ph) => ({ date: addDays(s1, j), kid, statut: 'present', lignes: [{ ouvrage: ph[0], phase: ph[1], h: 7.5 }], intemp: 0, panier: true });
+  const pointages = [
+    present(0, K, inst), present(0, L, pv),
+    present(1, K, pv), present(1, L, he),
+    { date: addDays(s1, 2), kid: K, statut: 'intemperie', lignes: [], intemp: 7.5, panier: false, obs: 'Pluie continue' },
+    { date: addDays(s1, 2), kid: L, statut: 'intemperie', lignes: [], intemp: 7.5, panier: false, obs: 'Pluie continue' },
+    present(3, K, he), present(3, L, he),
+    { date: addDays(s1, 4), kid: K, statut: 'formation', lignes: [], intemp: 0, panier: false, obs: 'Recyclage travail en hauteur' },
+    { date: addDays(s1, 4), kid: L, statut: 'formation', lignes: [], intemp: 0, panier: false, obs: 'Recyclage travail en hauteur' }
+  ].map(p => ({ id: `p|${cid}|${p.date}|${p.kid}`, chantierId: cid, compagnonId: p.kid, date: p.date, statut: p.statut, lignes: p.lignes, intemp: p.intemp, panier: p.panier, obs: p.obs || '', par: 'Démo' }));
 
   // Terrain : terrasses x opérations (repérage du métré)
   const zones = ['Terrasse 01', 'Terrasse 02', 'Terrasse 03', 'Terrasse 04'];
@@ -115,5 +134,5 @@ function construireDemo(lundiCourant) {
       lignes: [{ designation: 'Grue mobile avec opérateur', quantite: 1, unite: 'jour', pu: 480 }] }
   ];
 
-  return { chantier, ops, suivi, taches, journal, reserves, checklists, postes, situations, commandes };
+  return { chantier, ops, suivi, taches, journal, reserves, checklists, postes, situations, commandes, compagnons, pointages };
 }

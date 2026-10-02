@@ -55,8 +55,12 @@ function phasesBTE(base, cid) {
 function calcSuivi(base, cid, jusqua) {
   const c = base.chantiers.find(x => x.id === cid);
   const taux = num(c && c.tauxHoraire);
-  const entrees = base.suivi.filter(s => s.chantierId === cid).filter(s => !jusqua || s.semaine <= jusqua).sort((a, b) => a.semaine.localeCompare(b.semaine));
-  const rows = phasesBTE(base, cid).map(p => {
+  const entrees = entreesSuivi(base, cid).filter(s => !jusqua || s.semaine <= jusqua).sort((a, b) => a.semaine.localeCompare(b.semaine));
+  const phases = phasesBTE(base, cid);
+  const cles = new Set(phases.map(p => p.ouvrage + '||' + p.phase));
+  // Heures pointées sur une phase absente du BTE (ou non ventilées) : coût réel sans avancement associé
+  const horsBTE = entrees.filter(s => !cles.has(s.ouvrage + '||' + s.phase)).reduce((t, s) => t + num(s.heures), 0);
+  const rows = phases.map(p => {
     const es = entrees.filter(s => s.ouvrage === p.ouvrage && s.phase === p.phase);
     let pct = 0;
     es.forEach(s => { if (s.pct !== null && s.pct !== undefined && s.pct !== '') pct = num(s.pct); });
@@ -73,7 +77,70 @@ function calcSuivi(base, cid, jusqua) {
   // Comme le fichier SMAC : projection globale = écart total / avancement global
   tot.ecartProj = tot.pct > 0 ? tot.ecartH / tot.pct : 0;
   tot.impactProj = tot.ecartProj * taux;
+  tot.horsBTE = horsBTE;
   return { rows, tot, taux };
+}
+
+/* ============================ Pointage journalier ============================
+   Un pointage = un compagnon, un jour : statut, heures ventilées par phase du BTE,
+   heures d'intempéries, panier. Les heures des compagnons présents alimentent le
+   suivi hebdomadaire (elles s'ajoutent aux heures saisies manuellement). */
+const STATUTS_POINTAGE = [
+  ['present', 'Présent', 'P'], ['intemperie', 'Intempéries', 'I'], ['conge', 'Congés', 'CP'],
+  ['maladie', 'Maladie', 'M'], ['formation', 'Formation', 'F'], ['absent', 'Absent', 'A']
+];
+const QUALIFICATIONS = ['Chef de chantier', 'Chef d\'équipe', 'Compagnon', 'Ouvrier', 'Apprenti', 'Intérimaire'];
+
+const heuresPointage = p => p && p.statut === 'present' ? (p.lignes || []).reduce((t, l) => t + num(l.h), 0) : 0;
+const intempPointage = p => !p ? 0 : num(p.intemp);
+const idPointage = (cid, date, compagnonId) => `p|${cid}|${date}|${compagnonId}`;
+
+function pointagesDe(base, cid, du, au) {
+  return (base.pointages || []).filter(p => p.chantierId === cid && (!du || p.date >= du) && (!au || p.date <= au))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// Heures pointées regroupées par semaine et par phase, sous forme de saisies de suivi (sans %)
+function suiviDepuisPointages(base, cid) {
+  const m = new Map();
+  pointagesDe(base, cid).forEach(p => {
+    if (p.statut !== 'present') return;
+    const sem = lundi(p.date);
+    (p.lignes || []).forEach(l => {
+      if (!num(l.h)) return;
+      const k = sem + '||' + (l.ouvrage || '') + '||' + (l.phase || '');
+      if (!m.has(k)) m.set(k, { id: 'pt|' + k, chantierId: cid, semaine: sem, ouvrage: l.ouvrage || '', phase: l.phase || '', pct: null, heures: 0, source: 'pointage' });
+      m.get(k).heures += num(l.h);
+    });
+  });
+  return [...m.values()];
+}
+
+// Saisies du suivi : % et heures saisis à la semaine + heures issues du pointage journalier
+function entreesSuivi(base, cid) {
+  return base.suivi.filter(s => s.chantierId === cid).concat(suiviDepuisPointages(base, cid));
+}
+
+// Synthèse d'une période (jour ou semaine) : par compagnon et par phase
+function synthesePointage(base, cid, du, au) {
+  const pts = pointagesDe(base, cid, du, au);
+  const parCompagnon = {};
+  const parPhase = new Map();
+  const tot = { heures: 0, intemp: 0, paniers: 0, presences: 0, absences: 0 };
+  pts.forEach(p => {
+    const h = heuresPointage(p), hi = intempPointage(p);
+    const cp = parCompagnon[p.compagnonId] = parCompagnon[p.compagnonId] || { heures: 0, intemp: 0, paniers: 0, jours: 0 };
+    cp.heures += h; cp.intemp += hi;
+    if (p.panier) { cp.paniers++; tot.paniers++; }
+    if (p.statut === 'present') { cp.jours++; tot.presences++; } else if (p.statut !== 'intemperie') tot.absences++;
+    tot.heures += h; tot.intemp += hi;
+    if (p.statut === 'present') (p.lignes || []).forEach(l => {
+      const k = (l.ouvrage || '') + '||' + (l.phase || '');
+      if (!parPhase.has(k)) parPhase.set(k, { ouvrage: l.ouvrage || '', phase: l.phase || '', heures: 0 });
+      parPhase.get(k).heures += num(l.h);
+    });
+  });
+  return { pointages: pts, parCompagnon, parPhase: [...parPhase.values()], tot };
 }
 
 function statsTerrain(base, cid) {
@@ -191,9 +258,10 @@ function calcFinances(base, cid) {
   const budget = { mo: suivi.tot.budget * taux };
   CATEGORIES_ACHAT.forEach(cat => { budget[CLE_BUDGET[cat]] = num(b[CLE_BUDGET[cat]]); });
   const cmds = (base.commandes || []).filter(x => x.chantierId === cid && commandeEngagee(x));
-  const reel = { mo: suivi.tot.heures * taux };
+  const heuresReelles = suivi.tot.heures + suivi.tot.horsBTE;
+  const reel = { mo: heuresReelles * taux };
   CATEGORIES_ACHAT.forEach(cat => { reel[CLE_BUDGET[cat]] = cmds.filter(x => (x.categorie || 'Matériaux') === cat).reduce((t, x) => t + montantCommande(x), 0); });
-  const pfa = { mo: suivi.tot.heures > 0 ? Math.max(reel.mo, budget.mo - suivi.tot.impactProj) : budget.mo };
+  const pfa = { mo: heuresReelles > 0 ? Math.max(reel.mo, budget.mo - suivi.tot.impactProj + suivi.tot.horsBTE * taux) : budget.mo };
   CATEGORIES_ACHAT.forEach(cat => { const k = CLE_BUDGET[cat]; pfa[k] = Math.max(budget[k], reel[k]); });
   const somme = o => Object.values(o).reduce((t, v) => t + v, 0);
   budget.total = somme(budget); reel.total = somme(reel); pfa.total = somme(pfa);
@@ -211,7 +279,7 @@ function serieFinanciere(base, cid) {
   const c = base.chantiers.find(x => x.id === cid);
   if (!c) return [];
   const taux = num(c.tauxHoraire);
-  const suivi = base.suivi.filter(s => s.chantierId === cid);
+  const suivi = entreesSuivi(base, cid);
   const cmds = (base.commandes || []).filter(x => x.chantierId === cid && commandeEngagee(x));
   const sits = situationsDe(base, cid).filter(s => s.statut !== 'brouillon');
   const dates = [c.dateDebut, ...suivi.map(s => s.semaine), ...cmds.map(x => x.date), ...sits.map(s => s.mois + '-01')].filter(Boolean).sort();

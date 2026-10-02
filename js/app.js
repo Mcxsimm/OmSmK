@@ -10,7 +10,7 @@ const UI_KEY = 'omsmk_ui';
 const REF = REFERENTIEL;
 
 /* ================================ État =================================== */
-function dbVide() { return { version: 1, chantiers: [], ops: [], suivi: [], taches: [], journal: [], reserves: [], checklists: {}, postes: [], situations: [], commandes: [] }; }
+function dbVide() { return { version: 1, chantiers: [], ops: [], suivi: [], taches: [], journal: [], reserves: [], checklists: {}, postes: [], situations: [], commandes: [], compagnons: [], pointages: [] }; }
 function chargerDB() {
   const d = lireJSON(STORE_KEY, null);
   return d && Array.isArray(d.chantiers) ? Object.assign(dbVide(), d) : dbVide();
@@ -19,7 +19,7 @@ let db = chargerDB();
 let user = lireJSON(USER_KEY, null);
 const ui = Object.assign({
   view: 'tableau', chantierId: null, zone: null, terrainMode: 'liste', filtreTache: '',
-  qualiteTab: 'reserves', reserveFiltre: 'ouvertes', semaine: null, equipe: 2, paramTab: 'equipe'
+  qualiteTab: 'reserves', reserveFiltre: 'ouvertes', semaine: null, equipe: 2, paramTab: 'equipe', ptMode: 'jour'
 }, lireJSON(UI_KEY, {}));
 if (!ui.semaine) ui.semaine = lundi(aujourdHui());
 if (ui.view === 'chantiers') ui.view = 'portefeuille';
@@ -66,6 +66,7 @@ const NAV = [
     { v: 'bte', ic: 'calculator', t: 'Budget (BTE)' }
   ]},
   { groupe: 'Terrain', items: [
+    { v: 'pointage', ic: 'clock', t: 'Pointage journalier' },
     { v: 'terrain', ic: 'clipboard-check', t: 'Saisie terrain' },
     { v: 'journal', ic: 'notebook-pen', t: 'Journal de chantier' },
     { v: 'qualite', ic: 'shield-check', t: 'Qualité & réserves' }
@@ -91,7 +92,7 @@ function renderShell() {
     `<button class="nav-item ${ui.view === i.v ? 'active' : ''}" data-nav="${i.v}">${icone(i.ic)}<span>${i.t}</span>${i.v === 'qualite' && ouvertes ? `<span class="count alert">${ouvertes}</span>` : ''}${i.v === 'portefeuille' ? `<span class="count">${db.chantiers.length}</span>` : ''}</button>`).join('')}</div>`).join('');
   $('#sideFoot').innerHTML = `<button class="side-user" data-act="identite"><span class="avatar">${initiales(nomUser())}</span>
     <span class="grow"><span class="u-nom" style="display:block">${esc(nomUser() || 'Utilisateur')}</span><span class="u-role">${esc(user && user.role || 'Profil non renseigné')}</span></span>${icone('pencil', 'sm')}</button>`;
-  const mob = [['tableau', 'layout-dashboard', 'Bord'], ['terrain', 'clipboard-check', 'Terrain'], ['suivi', 'trending-up', 'Suivi'], ['journal', 'notebook-pen', 'Journal']];
+  const mob = [['tableau', 'layout-dashboard', 'Bord'], ['pointage', 'clock', 'Pointage'], ['terrain', 'clipboard-check', 'Terrain'], ['suivi', 'trending-up', 'Suivi']];
   $('#bottomNav').innerHTML = mob.map(([v, ic, t]) => `<button class="${ui.view === v ? 'active' : ''}" data-nav="${v}">${icone(ic)}<span>${t}</span></button>`).join('')
     + `<button data-act="menuMobile">${icone('menu')}<span>Plus</span></button>`;
   $('#crumbs').innerHTML = (c && !VUES_SANS_CHANTIER.includes(ui.view) ? `<span>${esc(c.nom)}</span>${icone('chevron-right', 'sm')}` : '') + `<b>${esc(TITRES[ui.view] || '')}</b>`;
@@ -114,7 +115,7 @@ function renderSyncPill() {
   p.innerHTML = `<span class="dot"></span><span class="lbl">${lbl}</span>`;
 }
 
-const VUES = { tableau: vTableau, terrain: vTerrain, suivi: vSuivi, bte: vBTE, journal: vJournal, qualite: vQualite, portefeuille: vPortefeuille, parametres: vParametres, finances: c => vFinances(c), situations: c => vSituations(c), commandes: c => vCommandes(c) };
+const VUES = { tableau: vTableau, terrain: vTerrain, suivi: vSuivi, bte: vBTE, journal: vJournal, qualite: vQualite, portefeuille: vPortefeuille, parametres: vParametres, finances: c => vFinances(c), situations: c => vSituations(c), commandes: c => vCommandes(c), pointage: c => vPointage(c) };
 
 function render() {
   if (!ch() && db.chantiers.length) ui.chantierId = db.chantiers[0].id;
@@ -176,9 +177,16 @@ function alertes(c, s) {
   const fi = calcFinances(db, c.id);
   if (fi.ca && fi.avFinancier + 0.1 < fi.avPhysique) out.push({ sev: 'warning', ic: 'receipt', t: 'Retard de facturation', d: `${pc(fi.avPhysique - fi.avFinancier)} d'avancement non facturé (≈ ${fmtE((fi.avPhysique - fi.avFinancier) * fi.ca)}).`, go: 'situations' });
   if (fi.ca && c.dateDebut && c.dateDebut <= auj && !situationsDe(db, c.id).some(x => x.mois === auj.slice(0, 7)) && fi.avFinancier < 1) out.push({ sev: 'warning', ic: 'file-plus', t: 'Situation du mois à établir', d: `Aucune situation pour ${new Date(auj + 'T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}.`, go: 'situations' });
+  const equipePt = (db.compagnons || []).filter(k => k.chantierId === c.id && k.actif !== false);
+  if (equipePt.length && c.dateDebut && c.dateDebut <= auj && (!c.dateFin || c.dateFin >= auj)) {
+    let veille = addDays(auj, -1);
+    while ([0, 6].includes(new Date(veille + 'T00:00:00').getDay())) veille = addDays(veille, -1);
+    const manquants = veille >= c.dateDebut ? equipePt.filter(k => !(db.pointages || []).some(p => p.chantierId === c.id && p.date === veille && p.compagnonId === k.id)) : [];
+    if (manquants.length) out.push({ sev: 'warning', ic: 'clock', t: `Pointage du ${fmtDate(veille)} incomplet`, d: `${manquants.length} compagnon(s) non pointé(s) : ${manquants.slice(0, 3).map(k => esc(`${k.prenom || ''} ${k.nom || ''}`.trim())).join(', ')}${manquants.length > 3 ? '…' : ''}.`, go: 'pointage', date: veille });
+  }
   const semCourante = lundi(auj);
   if (s.rows.length && c.dateDebut && c.dateDebut <= auj && (!c.dateFin || c.dateFin >= semCourante)
-      && !deCh(db.suivi).some(x => x.semaine === semCourante)) out.push({ sev: 'warning', ic: 'notebook-pen', t: 'Suivi de la semaine à renseigner', d: `Semaine ${semISO(semCourante)} : % d'avancement et heures pointées non saisis.`, go: 'suivi' });
+      && !deCh(db.suivi).some(x => x.semaine === semCourante && x.pct !== null && x.pct !== undefined)) out.push({ sev: 'warning', ic: 'notebook-pen', t: 'Suivi de la semaine à renseigner', d: `Semaine ${semISO(semCourante)} : % d'avancement des phases non saisi.`, go: 'suivi' });
   return out;
 }
 
@@ -238,7 +246,7 @@ function vTableau(c) {
   </div>`;
 
   const attention = `<div class="card"><div class="card-head"><h3>${icone('triangle-alert')}Points d'attention</h3><span class="badge ${al.length ? 'warn' : 'pos'}">${al.length || 'Aucun'}</span></div>
-    ${al.length ? `<ul class="attention-list">${al.map(a => `<li><span class="sev ${a.sev}">${icone(a.ic, 'sm')}</span><div class="grow"><div class="strong">${a.t}</div><div class="small muted">${a.d}</div></div>${a.go ? `<button class="btn ghost sm" data-nav="${a.go}">${icone('chevron-right', 'sm')}</button>` : ''}</li>`).join('')}</ul>`
+    ${al.length ? `<ul class="attention-list">${al.map(a => `<li><span class="sev ${a.sev}">${icone(a.ic, 'sm')}</span><div class="grow"><div class="strong">${a.t}</div><div class="small muted">${a.d}</div></div>${a.go ? `<button class="btn ghost sm" ${a.date ? `data-act="ptAller" data-d="${a.date}"` : `data-nav="${a.go}"`}>${icone('chevron-right', 'sm')}</button>` : ''}</li>`).join('')}</ul>`
       : `<div class="card-body row"><span class="sev good">${icone('circle-check', 'sm')}</span><span class="muted">Aucune dérive détectée. Le chantier est dans le budget.</span></div>`}</div>`;
 
   const courbe = `<div class="card"><div class="card-head"><h3>Courbe d'avancement</h3>
@@ -380,12 +388,18 @@ function vSuivi(c) {
   const calc = calcSuivi(db, c.id, sem);
   const precedent = calcSuivi(db, c.id, addDays(sem, -1));
   const entreesSem = deCh(db.suivi).filter(s => s.semaine === sem);
-  const totalSem = entreesSem.reduce((t, s) => t + num(s.heures), 0);
+  // Heures issues du pointage journalier (lecture seule ici)
+  const avecPt = (db.pointages || []).some(p => p.chantierId === c.id);
+  const ptSem = suiviDepuisPointages(db, c.id).filter(s => s.semaine === sem);
+  const hPt = (o, p) => ptSem.filter(s => s.ouvrage === o && s.phase === p).reduce((t, s) => t + s.heures, 0);
+  const totalPt = ptSem.reduce((t, s) => t + s.heures, 0);
+  const totalSem = entreesSem.reduce((t, s) => t + num(s.heures), 0) + totalPt;
+  const nCol = avecPt ? 10 : 9;
   let ouvCourant = null;
   const lignes = calc.rows.map((r, i) => {
     const e = entreesSem.find(s => s.ouvrage === r.ouvrage && s.phase === r.phase);
     const prev = precedent.rows[i];
-    const g = r.ouvrage !== ouvCourant ? `<tr class="group"><td colspan="9">${icone('building-2', 'sm')} ${esc(r.ouvrage)}</td></tr>` : '';
+    const g = r.ouvrage !== ouvCourant ? `<tr class="group"><td colspan="${nCol}">${icone('building-2', 'sm')} ${esc(r.ouvrage)}</td></tr>` : '';
     ouvCourant = r.ouvrage;
     const valPct = e && e.pct !== null && e.pct !== undefined ? Math.round(num(e.pct) * 1000) / 10 : '';
     return g + `<tr>
@@ -393,6 +407,7 @@ function vSuivi(c) {
       <td class="num"><div class="row" style="justify-content:flex-end;flex-wrap:nowrap;gap:2px">
         <input class="input cell" style="width:72px;border-color:var(--border-strong);background:var(--surface)" type="number" inputmode="decimal" min="0" max="100" step="5" placeholder="${Math.round(prev.pct * 100)}" value="${valPct}" data-change="suiviPct" data-o="${esc(r.ouvrage)}" data-p="${esc(r.phase)}" aria-label="% cumulé ${esc(r.phase)}"><span class="muted">%</span>
         <button class="btn ghost icon sm" title="Calculer depuis les quantités" data-act="suiviQte" data-o="${esc(r.ouvrage)}" data-p="${esc(r.phase)}">${icone('ruler', 'sm')}</button></div></td>
+      ${avecPt ? `<td class="num">${hPt(r.ouvrage, r.phase) ? `<span class="strong">${fmt(hPt(r.ouvrage, r.phase))}</span>` : '<span class="muted">—</span>'}</td>` : ''}
       <td class="num"><input class="input cell" style="width:80px;border-color:var(--border-strong);background:var(--surface)" type="number" inputmode="decimal" min="0" step="0.5" value="${e && num(e.heures) ? num(e.heures) : ''}" data-change="suiviH" data-o="${esc(r.ouvrage)}" data-p="${esc(r.phase)}" aria-label="Heures semaine ${esc(r.phase)}"></td>
       <td class="num"><div style="width:90px;margin-left:auto">${barre(r.pct, r.pct >= 1 ? 'pos' : '')}</div><div class="sub">${pc(r.pct)}</div></td>
       <td class="num">${fmt(r.heures)}</td>
@@ -402,25 +417,30 @@ function vSuivi(c) {
       <td class="num ${cls(r.impactProj)}">${r.heures ? signeE(r.impactProj) : '—'}</td></tr>`;
   }).join('');
   const T = calc.tot;
-  const semaines = [...new Set(deCh(db.suivi).map(s => s.semaine))].sort();
+  const toutes = entreesSuivi(db, c.id);
+  const semaines = [...new Set(toutes.map(s => s.semaine))].sort();
   const hist = semaines.length ? `<div class="card"><div class="card-head"><h3>Historique des saisies</h3><span class="hint">% cumulé · heures de la semaine</span></div>
     <div class="table-wrap"><table class="table"><thead><tr><th>Phase</th>${semaines.map(w => `<th class="num"><a href="#" data-act="allerSemaine" data-s="${w}">S${semISO(w)}</a><div style="font-weight:500;text-transform:none;letter-spacing:0">${fmtDateCourt(w)}</div></th>`).join('')}</tr></thead>
     <tbody>${phases.map(p => `<tr><td><span class="strong">${esc(p.phase)}</span> <span class="sub">· ${esc(p.ouvrage)}</span></td>${semaines.map(w => {
-      const e = deCh(db.suivi).find(s => s.semaine === w && s.ouvrage === p.ouvrage && s.phase === p.phase);
-      return e ? `<td class="num">${e.pct !== null && e.pct !== undefined ? pc(e.pct) : '·'}<div class="sub">${fmt(e.heures)} h</div></td>` : '<td class="num muted">—</td>';
+      const es = toutes.filter(s => s.semaine === w && s.ouvrage === p.ouvrage && s.phase === p.phase);
+      if (!es.length) return '<td class="num muted">—</td>';
+      const m = es.find(s => s.pct !== null && s.pct !== undefined);
+      return `<td class="num">${m ? pc(m.pct) : '·'}<div class="sub">${fmt(es.reduce((t, s) => t + num(s.heures), 0))} h</div></td>`;
     }).join('')}</tr>`).join('')}</tbody></table></div></div>` : '';
 
   return entete + `<div class="stack">
-    <div class="alert info">${icone('info')}<div>Chaque semaine, saisissez le <b>% d'avancement cumulé</b> de chaque phase (une estimation suffit) et les <b>heures pointées dans la semaine</b>, cohérentes avec le pointage RH.
+    <div class="alert info">${icone('info')}<div>${avecPt
+      ? `Chaque semaine, saisissez le <b>% d'avancement cumulé</b> de chaque phase. Les heures viennent du <a href="#" data-act="ptAller" data-d="${sem}">pointage journalier</a> ; la colonne « Ajout manuel » sert aux heures non pointées (régularisations, intérim facturé…).`
+      : `Chaque semaine, saisissez le <b>% d'avancement cumulé</b> de chaque phase (une estimation suffit) et les <b>heures pointées dans la semaine</b>, ou utilisez le <a href="#" data-nav="pointage">pointage journalier</a> qui les calcule automatiquement.`}
       Écart = heures budgétées × % réalisé − heures pointées : positif = gain, négatif = dépassement.</div></div>
     <div class="card">
       <div class="table-wrap"><table class="table">
-        <thead><tr><th>Phase</th><th class="num">% cumulé</th><th class="num">Heures semaine</th><th class="num">Réalisé</th><th class="num">H. pointées</th><th class="num">Écart h</th><th class="num">Impact</th><th class="num">Projeté h</th><th class="num">Projeté €</th></tr></thead>
+        <thead><tr><th>Phase</th><th class="num">% cumulé</th>${avecPt ? '<th class="num" title="Somme des pointages journaliers de la semaine">Pointage</th><th class="num">Ajout manuel</th>' : '<th class="num">Heures semaine</th>'}<th class="num">Réalisé</th><th class="num">H. pointées</th><th class="num">Écart h</th><th class="num">Impact</th><th class="num">Projeté h</th><th class="num">Projeté €</th></tr></thead>
         <tbody>${lignes}
-          <tr class="total"><td>Total chantier</td><td></td><td class="num">${fmt(totalSem)} h</td><td class="num">${pc(T.pct)}</td><td class="num">${fmt(T.heures)}</td>
+          <tr class="total"><td>Total chantier</td><td></td>${avecPt ? `<td class="num">${fmt(totalPt)} h</td><td class="num">${fmt(totalSem - totalPt)} h</td>` : `<td class="num">${fmt(totalSem)} h</td>`}<td class="num">${pc(T.pct)}</td><td class="num">${fmt(T.heures)}</td>
             <td class="num ${cls(T.ecartH)}">${signe(T.ecartH)}</td><td class="num ${cls(T.impact)}">${signeE(T.impact)}</td><td class="num ${cls(T.ecartProj)}">${signe(T.ecartProj)}</td><td class="num ${cls(T.impactProj)}">${signeE(T.impactProj)}</td></tr>
         </tbody></table></div>
-      <div class="card-foot small muted">${icone('clock', 'sm')} ${fmt(totalSem)} h saisies cette semaine — à rapprocher du pointage RH. Valeurs cumulées au ${fmtDate(addDays(sem, 6))} · taux horaire ${fmtE(calc.taux)}/h.</div>
+      <div class="card-foot small muted">${icone('clock', 'sm')} ${fmt(totalSem)} h cette semaine${avecPt ? ` dont ${fmt(totalPt)} h pointées` : ' — à rapprocher du pointage RH'}. Valeurs cumulées au ${fmtDate(addDays(sem, 6))} · taux horaire ${fmtE(calc.taux)}/h.</div>
     </div>${hist}</div>`;
 }
 
@@ -729,6 +749,11 @@ function renderBiblio() {
 
 function modalJournal(j) {
   const e = j || { date: aujourdHui(), meteo: 'Beau', effectif: '', heures: '', intemperie: false, verifs: [] };
+  if (!j) {
+    // Effectif et heures repris du pointage du jour
+    const pt = synthesePointage(db, ui.chantierId, e.date, e.date);
+    if (pt.pointages.length) { e.effectif = pt.tot.presences; e.heures = pt.tot.heures; e.intemperie = pt.tot.intemp > 0; }
+  }
   ouvrirModal(j ? 'Modifier l\'entrée' : 'Nouvelle entrée de journal', `
     <input type="hidden" id="jId" value="${esc(j ? j.id : '')}">
     <div class="form-grid">${champ('jDate', 'Date', e.date, 'date')}${selectHTML('jMeteo', 'Météo', REF.meteo, e.meteo)}
@@ -1142,6 +1167,7 @@ const ACT = {
     db.chantiers.push(d.chantier); db.ops.push(...d.ops); db.suivi.push(...d.suivi); db.taches.push(...d.taches);
     db.journal.push(...d.journal); db.reserves.push(...d.reserves); Object.assign(db.checklists, d.checklists);
     db.postes.push(...d.postes); db.situations.push(...d.situations); db.commandes.push(...d.commandes);
+    db.compagnons.push(...d.compagnons); db.pointages.push(...d.pointages);
     ui.chantierId = d.chantier.id; ui.zone = null; ui.semaine = lundi(aujourdHui());
     save(); allerA('tableau'); toast('Démonstration chargée', 'succes');
   },
@@ -1207,7 +1233,7 @@ function insererOp(op) {
 
 function supprimerChantier(cid) {
   db.chantiers = db.chantiers.filter(c => c.id !== cid);
-  ['ops', 'suivi', 'taches', 'journal', 'reserves', 'postes', 'situations', 'commandes'].forEach(k => { db[k] = (db[k] || []).filter(x => x.chantierId !== cid); });
+  ['ops', 'suivi', 'taches', 'journal', 'reserves', 'postes', 'situations', 'commandes', 'compagnons', 'pointages'].forEach(k => { db[k] = (db[k] || []).filter(x => x.chantierId !== cid); });
   delete db.checklists[cid];
   if (ui.chantierId === cid) ui.chantierId = db.chantiers[0] ? db.chantiers[0].id : null;
 }

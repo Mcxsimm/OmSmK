@@ -95,7 +95,7 @@ Deno.test('série financière mensuelle cumulée', () => {
 
 Deno.test('démo CIGV : données financières cohérentes', () => {
   const d = F.construireDemo('2026-09-28');
-  const b = { chantiers: [d.chantier], ops: d.ops, suivi: d.suivi, taches: d.taches, journal: [], reserves: [], checklists: {}, postes: d.postes, situations: d.situations, commandes: d.commandes };
+  const b = { chantiers: [d.chantier], ops: d.ops, suivi: d.suivi, taches: d.taches, journal: [], reserves: [], checklists: {}, postes: d.postes, situations: d.situations, commandes: d.commandes, compagnons: d.compagnons, pointages: d.pointages };
   const f = F.calcFinances(b, d.chantier.id);
   assertEquals(f.ca, 22650 + 480);
   assertEquals(F.situationsDe(b, d.chantier.id).length, 2);

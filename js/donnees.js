@@ -1,0 +1,444 @@
+/* ==========================================================================
+   OmSmK — imports (BTE SMAC, listes terrain, sauvegardes), exports (Excel,
+   rapport PDF) et QR codes de zones.
+   ========================================================================== */
+// deno-lint-ignore-file no-unused-vars
+'use strict';
+
+/* ============================ Import fichiers ============================ */
+function choisirFichier() {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '.xlsx,.xlsm,.xls,.csv,.txt,.json';
+  inp.onchange = () => { if (inp.files[0]) importerFichier(inp.files[0]); };
+  inp.click();
+}
+
+async function importerFichier(file) {
+  const nom = file.name.toLowerCase();
+  try {
+    if (nom.endsWith('.json')) {
+      const d = JSON.parse(await file.text());
+      if (!d || !Array.isArray(d.chantiers)) throw new Error('Fichier de sauvegarde invalide');
+      if (!await confirmer('Restaurer la sauvegarde', `La sauvegarde contient ${d.chantiers.length} chantier(s). Elle <b>remplacera</b> les données de cet appareil.`, { ok: 'Restaurer', danger: true })) return;
+      Synchro.oublierEtat();
+      db = Object.assign(dbVide(), d); ui.chantierId = null; save(); fermerModal(); render(); toast('Sauvegarde restaurée', 'succes');
+      return;
+    }
+    if (nom.endsWith('.csv') || nom.endsWith('.txt')) {
+      importerTerrain(parseCSV(await file.text()));
+      return;
+    }
+    if (typeof XLSX === 'undefined') throw new Error('Bibliothèque Excel non chargée (connectez-vous une première fois à Internet).');
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    if (wb.SheetNames.some(n => /main d.?(oe|œ)uvre/i.test(n))) await importerBTE(wb, file.name);
+    else importerTerrain(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' }));
+  } catch (e) {
+    console.error(e);
+    toast('Import impossible : ' + (e.message || e), 'erreur');
+  }
+}
+
+function importerTerrain(rows) {
+  if (!rows.length) throw new Error('Fichier vide');
+  const h = rows[0].map(norm);
+  const col = (...noms) => h.findIndex(x => noms.includes(x));
+  const iC = col('chantier'), iZ = col('zone', 'support', 'repere', 'localisation', 'emplacement'), iL = col('lot', 'phase'),
+    iT = col('tache', 'taches', 'travaux', 'operation'), iF = col('fait', 'realise', 'etat'), iO = col('observation', 'observations', 'obs', 'commentaire');
+  if (iT < 0 || iZ < 0) throw new Error('Colonnes « Zone » (ou « Support ») et « Tache » obligatoires');
+  if (iC < 0 && !ch()) throw new Error('Pas de colonne « Chantier » : créez ou ouvrez d\'abord un chantier');
+  const exist = new Set(db.taches.map(t => t.chantierId + '||' + t.zone + '||' + t.tache));
+  let n = 0, nc = 0, cible = null;
+  rows.slice(1).forEach(r => {
+    const tache = String(r[iT] ?? '').trim(), zone = String(r[iZ] ?? '').trim();
+    if (!tache || !zone) return;
+    let c = ch();
+    if (iC >= 0 && String(r[iC] ?? '').trim()) {
+      const nomC = String(r[iC]).trim();
+      c = db.chantiers.find(x => norm(x.nom) === norm(nomC));
+      if (!c) {
+        c = { id: uid(), nom: nomC, metier: 'Étanchéité', support: 'Béton', tauxHoraire: REF.tauxHoraireDefaut, heuresJour: REF.heuresJourDefaut, creeLe: new Date().toISOString() };
+        db.chantiers.push(c); nc++;
+      }
+    }
+    cible = cible || c;
+    if (exist.has(c.id + '||' + zone + '||' + tache)) return;
+    exist.add(c.id + '||' + zone + '||' + tache);
+    const fait = iF >= 0 && estFait(r[iF]);
+    db.taches.push({ id: uid(), chantierId: c.id, zone, lot: iL >= 0 ? String(r[iL] ?? '').trim() : '', tache, fait, faitLe: fait ? aujourdHui() : '', faitPar: '', obs: iO >= 0 ? String(r[iO] ?? '').trim() : '', ajout: false });
+    n++;
+  });
+  if (cible) ui.chantierId = cible.id;
+  ui.view = 'terrain'; ui.zone = null;
+  save(); fermerModal(); render();
+  toast(`${n} tâche(s) importée(s)${nc ? `, ${nc} chantier(s) créé(s)` : ''}`, 'succes');
+}
+
+// Import du BTE standard SMAC (onglets Synthèse, 1a Main d'œuvre, Étape 2 - Objectifs et suivi)
+async function importerBTE(wb, nomFichier) {
+  const sn = wb.SheetNames;
+  const lignes = n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: null, blankrows: true });
+  const shMO = sn.find(n => /main d.?(oe|œ)uvre/i.test(n));
+  const shSy = sn.find(n => /synth/i.test(n));
+  const shSu = sn.find(n => /suivi/i.test(n));
+
+  // 1. Synthèse : informations chantier
+  const info = {};
+  if (shSy) {
+    const R = lignes(shSy);
+    const pick = re => {
+      for (const row of R) for (let i = 0; i < row.length; i++) {
+        if (typeof row[i] === 'string' && re.test(row[i])) {
+          for (let j = i + 1; j < row.length; j++) if (row[j] !== null && row[j] !== '') return row[j];
+          return null;
+        }
+      }
+      return null;
+    };
+    info.nom = pick(/^\s*chantier\s*:/i); info.conducteur = pick(/conducteur/i); info.imputation = pick(/imputation/i);
+    info.agence = pick(/^\s*agence/i); info.marcheHT = pick(/march.*sign/i); info.marge = pick(/marge commerciale/i); info.taux = pick(/taux horaire/i);
+  }
+
+  // 2. Main d'œuvre : opérations
+  const R = lignes(shMO);
+  let hj = REF.heuresJourDefaut, cols = null, bloc = '';
+  R.forEach((row, r) => row.forEach((v, i) => {
+    if (typeof v === 'string' && /heures par journ/i.test(v)) {
+      const sous = R[r + 1] && R[r + 1][i];
+      if (num(sous) > 0) hj = num(sous);
+      else { const n = row.slice(i + 1).find(x => num(x) > 0 && num(x) < 24); if (n) hj = num(n); }
+    }
+  }));
+  const ops = [];
+  R.forEach(row => {
+    const estEntete = row.some(v => typeof v === 'string' && /phase chantier/i.test(v));
+    if (estEntete) {
+      const f = re => row.findIndex(v => typeof v === 'string' && re.test(v));
+      cols = { cx: f(/^\s*complexe/i), ph: f(/phase chantier/i), op: f(/op[ée]rations/i), me: f(/m[ée]tr[ée]/i), ca: f(/cadence/i), h: f(/nbr d.?heures/i), dv: f(/devis/i) };
+      return;
+    }
+    if (typeof row[0] === 'string' && /^\s*\d+\.\s*$/.test(row[0]) && row[1]) { bloc = String(row[1]).trim(); return; }
+    if (!cols || cols.op < 0) return;
+    const opNom = row[cols.op];
+    if (typeof opNom !== 'string' || !opNom.trim() || /total/i.test(opNom)) return;
+    const metre = num(row[cols.me]), cad = num(row[cols.ca]), h = num(row[cols.h]);
+    if (metre <= 0 && h <= 0) return;
+    let ouvrage = cols.cx >= 0 && row[cols.cx] ? String(row[cols.cx]).trim() : '';
+    if (!ouvrage || ouvrage === '0') ouvrage = bloc && bloc !== '0' ? bloc : 'Ouvrage 1';
+    let phase = cols.ph >= 0 && row[cols.ph] ? String(row[cols.ph]).trim() : '';
+    if (!phase || phase === '0') phase = phaseDeOperation(opNom) || 'Non classé';
+    const calcule = metre > 0 && cad > 0;
+    ops.push({
+      ouvrage, phase, operation: opNom.trim(), designation: '', metre, unite: calcule ? uniteDe(opNom) : (metre > 0 ? uniteDe(opNom) : 'h'),
+      cadence: calcule ? cad : 0, heuresForfait: calcule ? 0 : h, devis: cols.dv >= 0 ? num(row[cols.dv]) : 0
+    });
+  });
+  if (!ops.length) throw new Error('aucune opération renseignée dans l\'onglet « 1a Main d\'œuvre » (modèle de BTE vierge ?)');
+
+  // 3. Suivi hebdomadaire (Étape 2)
+  const suivi = [];
+  if (shSu) {
+    const S = lignes(shSu);
+    let semCols = [];
+    S.forEach(row => {
+      const sc = [];
+      row.forEach((v, i) => { const m = typeof v === 'string' && v.match(/^\s*semaine\s*(\d+)/i); if (m) sc.push({ k: Number(m[1]), col: i }); });
+      if (sc.length) { semCols = sc; return; }
+      const ouv = row[1], ph = row[2];
+      if (!semCols.length || typeof ph !== 'string' || !ph.trim() || /phase chantier/i.test(ph)) return;
+      semCols.forEach(({ k, col }) => {
+        const p = row[col], hh = num(row[col + 1]);
+        const aPct = p !== null && p !== '' && num(p) > 0;
+        if (aPct || hh > 0) suivi.push({ k, ouvrage: String(ouv || bloc).trim(), phase: ph.trim(), pct: aPct ? num(p) : null, heures: hh });
+      });
+    });
+  }
+
+  const nomC = String(info.nom || nomFichier.replace(/\.[^.]+$/, '')).trim();
+  let c = db.chantiers.find(x => norm(x.nom) === norm(nomC));
+  if (c) {
+    if (!await confirmer('Chantier existant', `Le chantier « <b>${esc(c.nom)}</b> » existe déjà. Remplacer son BTE${suivi.length ? ' et son suivi hebdomadaire' : ''} par ceux du fichier ?`, { ok: 'Remplacer', danger: true })) return;
+    db.ops = db.ops.filter(o => o.chantierId !== c.id);
+    if (suivi.length) db.suivi = db.suivi.filter(s => s.chantierId !== c.id);
+  } else {
+    const facade = ops.some(o => /ossature|bardage|peau|cassette|clin/i.test(o.operation + o.phase));
+    c = { id: uid(), nom: nomC, metier: facade ? 'Façade' : 'Étanchéité', support: 'Béton', creeLe: new Date().toISOString() };
+    db.chantiers.push(c);
+  }
+  Object.assign(c, {
+    conducteur: info.conducteur ? String(info.conducteur) : c.conducteur, imputation: info.imputation ? String(info.imputation) : c.imputation,
+    agence: info.agence ? String(info.agence) : c.agence, marcheHT: num(info.marcheHT) || c.marcheHT,
+    margeCommerciale: num(info.marge) || c.margeCommerciale, tauxHoraire: num(info.taux) || c.tauxHoraire || REF.tauxHoraireDefaut, heuresJour: hj
+  });
+  ops.forEach(o => db.ops.push(Object.assign({ id: uid(), chantierId: c.id }, o)));
+  if (suivi.length) {
+    const kMax = Math.max(...suivi.map(s => s.k));
+    if (!c.dateDebut) c.dateDebut = addDays(lundi(aujourdHui()), -7 * (kMax - 1));
+    const base = lundi(c.dateDebut);
+    suivi.forEach(s => db.suivi.push({ id: uid(), chantierId: c.id, semaine: addDays(base, 7 * (s.k - 1)), ouvrage: s.ouvrage, phase: s.phase, pct: s.pct, heures: s.heures }));
+  }
+  ui.chantierId = c.id; ui.view = 'bte';
+  save(); fermerModal(); render();
+  toast(`BTE importé : ${ops.length} opération(s)${suivi.length ? `, ${suivi.length} saisie(s) de suivi` : ''}`, 'succes');
+}
+
+function phaseDeOperation(op) {
+  const n = norm(op);
+  for (const m of Object.values(REF.metiers)) for (const [ph, ops] of Object.entries(m)) if (ops.some(o => norm(o) === n || n.includes(norm(o)))) return ph;
+  if (/hors d.?eau/.test(n)) return "Hors d'eau";
+  if (/2.{0,4}couche|releve/.test(n)) return '2nd couche et relevés';
+  return '';
+}
+function uniteDe(op) {
+  const n = norm(op);
+  if (/^(ep|crosses?|lanterneaux?)$/.test(n) || /lanterneau|crosse/.test(n)) return 'U';
+  if (/releve|equerre|solin|couvertine|garde|joint|acrotere|encadrement|bavette|angle|costiere|rive/.test(n)) return 'mL';
+  return 'm²';
+}
+
+/* ================================ Exports ================================ */
+function exporterExcel() {
+  const c = ch();
+  if (!c) return;
+  if (typeof XLSX === 'undefined') return toast('Bibliothèque Excel non chargée.', 'erreur');
+  const wb = XLSX.utils.book_new();
+  const add = (nom, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), nom);
+  add('BTE', [['Ouvrage', 'Phase', 'Opération', 'Désignation', 'Métré', 'Unité', 'Cadence (u/j/homme)', 'Heures', 'Budget €', 'Devis €'],
+    ...deCh(db.ops).map(o => { const h = heuresOp(o, c); return [o.ouvrage, o.phase, o.operation, o.designation, num(o.metre), o.unite, num(o.cadence), +h.toFixed(2), +(h * num(c.tauxHoraire)).toFixed(2), num(o.devis)]; })]);
+  const s = calcSuivi(db, c.id);
+  add('Avancement', [['Ouvrage', 'Phase', 'Objectif h', '% réalisé', 'H. pointées', 'Écart h à date', 'Impact € à date', 'Écart h projeté', 'Impact € projeté'],
+    ...s.rows.map(r => [r.ouvrage, r.phase, +r.budget.toFixed(2), +r.pct.toFixed(3), r.heures, +r.ecartH.toFixed(2), +r.impact.toFixed(2), +r.ecartProj.toFixed(2), +r.impactProj.toFixed(2)]),
+    ['TOTAL', '', +s.tot.budget.toFixed(2), +s.tot.pct.toFixed(3), s.tot.heures, +s.tot.ecartH.toFixed(2), +s.tot.impact.toFixed(2), +s.tot.ecartProj.toFixed(2), +s.tot.impactProj.toFixed(2)]]);
+  add('Suivi hebdo', [['Semaine (lundi)', 'N° semaine', 'Ouvrage', 'Phase', '% cumulé', 'Heures pointées'],
+    ...deCh(db.suivi).sort((a, b) => a.semaine.localeCompare(b.semaine)).map(e => [e.semaine, semISO(e.semaine), e.ouvrage, e.phase, e.pct ?? '', num(e.heures)])]);
+  add('Terrain', [['Chantier', 'Zone', 'Lot', 'Tache', 'Fait', 'Fait le', 'Par', 'Observation', 'Non prévu'],
+    ...deCh(db.taches).map(t => [c.nom, t.zone, t.lot, t.tache, estFait(t.fait) ? 'VRAI' : 'FAUX', t.faitLe, t.faitPar, t.obs, t.ajout ? 'oui' : ''])]);
+  add('Journal', [['Date', 'Météo', 'Effectif', 'Heures', 'Intempérie', 'Cause', 'Texte', 'Auteur'],
+    ...deCh(db.journal).sort((a, b) => a.date.localeCompare(b.date)).map(j => [j.date, j.meteo, num(j.effectif), num(j.heures), j.intemperie ? 'oui' : '', j.cause, j.texte, j.auteur])]);
+  add('Réserves', [['Zone', 'Description', 'Origine', 'Responsable', 'Échéance', 'Statut', 'Créée le', 'Levée le'],
+    ...deCh(db.reserves).map(r => [r.zone, r.description, r.origine, r.responsable, r.echeance, r.statut, r.creeLe, r.leveeLe])]);
+  toast('Export Excel généré', 'succes');
+  XLSX.writeFile(wb, `OmSmK_${c.nom.replace(/[^\w-]+/g, '_')}_${aujourdHui()}.xlsx`);
+}
+
+// jsPDF (polices standard) : remplacer les espaces insécables et caractères hors Latin-1
+// deno-lint-ignore no-control-regex
+const pdfTxt = s => String(s ?? '').replace(/[  ]/g, ' ').replace(/−/g, '-').replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').replace(/…/g, '...').replace(/œ/g, 'oe').replace(/Œ/g, 'OE').replace(/[^\x00-\xFF€]/g, '');
+
+async function rapportPDF() {
+  const c = ch();
+  if (!c) return;
+  if (!globalThis.jspdf) return toast('Bibliothèque PDF non chargée.', 'erreur');
+  toast('Génération du rapport…');
+  const { jsPDF } = globalThis.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const s = calcSuivi(db, c.id);
+  const t = statsTerrain(db, c.id);
+  const st = statutChantier(c);
+  const theo = avancementTheorique(c);
+  const NAVY = [14, 35, 64], ACCENT = [232, 89, 12], GRIS = [102, 112, 133], TEXTE = [16, 24, 40], LIGNE = [228, 232, 238];
+  const POS = [6, 118, 71], NEG = [180, 35, 24];
+  const W = 210, M = 14, CW = W - 2 * M;
+  const T = rows => rows.map(r => r.map(pdfTxt));
+  const couleur = n => n > 0.04 ? POS : n < -0.04 ? NEG : TEXTE;
+
+  // En-tête
+  doc.setFillColor(...NAVY); doc.rect(0, 0, W, 26, 'F');
+  doc.setFillColor(...ACCENT); doc.roundedRect(M, 7, 12, 12, 2.5, 2.5, 'F');
+  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.text('OS', M + 6, 14.6, { align: 'center' });
+  doc.setFontSize(13); doc.text('OmSmK', M + 16, 12.5);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(195, 207, 224); doc.text(pdfTxt('Rapport d\'avancement de chantier'), M + 16, 18);
+  doc.text(pdfTxt(new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })), W - M, 12.5, { align: 'right' });
+  doc.text(pdfTxt(`Semaine ${semISO(lundi(aujourdHui()))}`), W - M, 18, { align: 'right' });
+
+  // Titre et fiche
+  let y = 38;
+  doc.setTextColor(...ACCENT); doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.text(pdfTxt((c.client || 'Chantier').toUpperCase()), M, y);
+  doc.setTextColor(...TEXTE); doc.setFontSize(18); doc.text(pdfTxt(c.nom), M, y + 8);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GRIS);
+  doc.text(pdfTxt([c.adresse, c.metier, st.txt].filter(Boolean).join('  ·  ')), M, y + 14);
+  y += 21;
+  const infos = [['Conducteur de travaux', c.conducteur], ['Chef de chantier', c.chef], ['Période', c.dateDebut ? `${fmtDate(c.dateDebut)} - ${fmtDate(c.dateFin) || '...'}` : ''],
+    ['Marché HT', num(c.marcheHT) ? fmtE(c.marcheHT) : ''], ['Taux horaire', num(c.tauxHoraire) ? fmtE(c.tauxHoraire) + ' / h' : ''], ['Édité par', nomUser()]].filter(r => r[1]);
+  infos.forEach((r, i) => {
+    const cx = M + (i % 3) * (CW / 3), cy = y + Math.floor(i / 3) * 10;
+    doc.setFontSize(7.5); doc.setTextColor(...GRIS); doc.text(pdfTxt(r[0].toUpperCase()), cx, cy);
+    doc.setFontSize(9.5); doc.setTextColor(...TEXTE); doc.text(pdfTxt(r[1]), cx, cy + 4.5);
+  });
+  y += Math.ceil(infos.length / 3) * 10 + 4;
+
+  // Indicateurs
+  const kpis = [
+    ['Avancement', pc(s.tot.pct), theo !== null ? `prévu ${pc(theo)}` : `${fmt(s.tot.gagnees)} h produites`, TEXTE],
+    ['Heures pointées', `${fmt(s.tot.heures, 0)} h`, `sur ${fmt(s.tot.budget, 0)} h budgétées`, TEXTE],
+    ['Écart à date', `${signe(s.tot.ecartH)} h`, signeE(s.tot.impact), couleur(s.tot.ecartH)],
+    ['Projection fin', `${signe(s.tot.ecartProj)} h`, signeE(s.tot.impactProj), couleur(s.tot.ecartProj)]
+  ];
+  const kw = (CW - 9) / 4;
+  kpis.forEach(([l, v, sub, col], i) => {
+    const kx = M + i * (kw + 3);
+    doc.setFillColor(248, 249, 251); doc.setDrawColor(...LIGNE); doc.roundedRect(kx, y, kw, 22, 2, 2, 'FD');
+    doc.setFontSize(7.5); doc.setTextColor(...GRIS); doc.text(pdfTxt(l.toUpperCase()), kx + 4, y + 6);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(...col); doc.text(pdfTxt(v), kx + 4, y + 13.5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...GRIS); doc.text(pdfTxt(sub), kx + 4, y + 18.5);
+  });
+  y += 30;
+
+  // besoin : hauteur (mm) du contenu qui suit, pour ne pas laisser un titre seul en bas de page
+  const titre = (txt, besoin = 24) => {
+    if (y + 8 + besoin > 280) { doc.addPage(); y = 20; }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...TEXTE); doc.text(pdfTxt(txt), M, y);
+    doc.setDrawColor(...ACCENT); doc.setLineWidth(0.6); doc.line(M, y + 2, M + 12, y + 2); doc.setLineWidth(0.2);
+    y += 6;
+  };
+  const table = (head, body, extra = {}) => {
+    doc.autoTable(Object.assign({
+      startY: y, head: [head.map(pdfTxt)], body: T(body), theme: 'plain', margin: { left: M, right: M },
+      styles: { font: 'helvetica', fontSize: 8.5, cellPadding: { top: 2.2, bottom: 2.2, left: 2, right: 2 }, textColor: TEXTE, lineColor: LIGNE, lineWidth: { bottom: 0.2 } },
+      headStyles: { fillColor: [244, 246, 249], textColor: GRIS, fontStyle: 'bold', fontSize: 7.5 },
+      alternateRowStyles: { fillColor: [252, 252, 253] }
+    }, extra));
+    y = doc.lastAutoTable.finalY + 9;
+  };
+  const image = async (svg, wPx, hPx) => {
+    const hMm = CW * hPx / wPx;
+    if (y + hMm > 280) { doc.addPage(); y = 20; }
+    try { doc.addImage(await svgEnPng(svg, wPx, hPx), 'PNG', M, y, CW, hMm); } catch (_e) { /* graphique ignoré */ }
+    y += hMm + 6;
+  };
+
+  const pts = serieAvancement(db, c.id);
+  if (pts.length && s.rows.length) {
+    titre('Courbe d\'avancement', CW * 250 / 760 + 4);
+    doc.setFontSize(8); doc.setTextColor(...GRIS);
+    doc.setFillColor(42, 120, 214); doc.rect(M, y - 1.6, 6, 1.2, 'F'); doc.text(pdfTxt('Réel (cumul pondéré)'), M + 8, y);
+    if (pts.some(p => p.theo !== null)) { doc.setDrawColor(235, 104, 52); doc.setLineWidth(0.5); doc.setLineDashPattern([1.2, 0.8], 0); doc.line(M + 48, y - 1, M + 54, y - 1); doc.setLineDashPattern([], 0); doc.setLineWidth(0.2); doc.text(pdfTxt('Prévu (délai linéaire)'), M + 56, y); }
+    y += 3;
+    await image(courbeAvancement(pts, 760, { impression: true, hauteur: 250 }), 760, 250);
+  }
+  if (s.rows.length) {
+    titre('Avancement par phase');
+    table(['Ouvrage', 'Phase', 'Budget h', 'Réalisé', 'H. pointées', 'Écart h', 'Impact', 'Projeté'],
+      [...s.rows.map(r => [r.ouvrage, r.phase, fmt(r.budget), pc(r.pct), fmt(r.heures), r.heures ? signe(r.ecartH) : '-', r.heures ? signeE(r.impact) : '-', r.heures ? signeE(r.impactProj) : '-']),
+        ['Total', '', fmt(s.tot.budget), pc(s.tot.pct), fmt(s.tot.heures), signe(s.tot.ecartH), signeE(s.tot.impact), signeE(s.tot.impactProj)]],
+      { columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' } },
+        didParseCell: d => { if (d.section === 'body' && d.row.index === s.rows.length) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [244, 246, 249]; } } });
+    const hE = 16 + s.rows.length * 34; // hauteur du graphique en mode non compact
+    titre('Écart d\'heures par phase', CW * hE / 760);
+    await image(barresEcarts(s.rows, 760, { impression: true }), 760, hE);
+  }
+  const zones = zonesDe(c.id);
+  if (zones.length) {
+    titre(`Avancement terrain par zone · ${t.faites} / ${t.total} tâches (${pc(t.pct)})`);
+    table(['Zone', 'Faites', 'Total', 'Avancement', 'Reste à faire'], zones.map(z => {
+      const ts = deCh(db.taches).filter(x => x.zone === z);
+      const f = ts.filter(x => estFait(x.fait)).length;
+      const reste = ts.filter(x => !estFait(x.fait)).map(x => x.tache);
+      return [z, String(f), String(ts.length), pc(ts.length ? f / ts.length : 0), reste.slice(0, 4).join(', ') + (reste.length > 4 ? '...' : '')];
+    }), { columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } } });
+  }
+  const ouvertes = deCh(db.reserves).filter(r => r.statut !== 'levée');
+  if (ouvertes.length) {
+    titre(`Réserves ouvertes (${ouvertes.length})`);
+    table(['N°', 'Zone', 'Description', 'Origine', 'Responsable', 'Échéance'], ouvertes.map(r => [numeroReserve(r), r.zone, r.description, r.origine, r.responsable, fmtDate(r.echeance)]),
+      { columnStyles: { 2: { cellWidth: 70 } } });
+  }
+  const js = deCh(db.journal).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
+  if (js.length) {
+    titre('Journal de chantier (10 dernières entrées)');
+    table(['Date', 'Météo', 'Effectif', 'Observations'], js.map(j => [fmtDate(j.date), (j.meteo || '') + (j.intemperie ? ' (intempérie)' : ''), num(j.effectif) ? String(num(j.effectif)) : '', (j.cause ? j.cause + ' - ' : '') + (j.texte || '')]),
+      { columnStyles: { 3: { cellWidth: 110 } } });
+  }
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(...LIGNE); doc.line(M, 286, W - M, 286);
+    doc.setFontSize(7.5); doc.setTextColor(...GRIS); doc.setFont('helvetica', 'normal');
+    doc.text(pdfTxt(`OmSmK  ·  ${c.nom}`), M, 290.5);
+    doc.text(pdfTxt(`Page ${i} / ${n}`), W - M, 290.5, { align: 'right' });
+  }
+
+  const nom = `Rapport_${c.nom.replace(/[^\w-]+/g, '_')}_${aujourdHui()}.pdf`;
+  const blob = doc.output('blob');
+  try {
+    const file = new File([blob], nom, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] }) && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
+      await navigator.share({ files: [file], title: 'Rapport chantier', text: `Rapport d'avancement – ${c.nom}` });
+      return;
+    }
+  } catch (e) { if (e.name === 'AbortError') return; }
+  doc.save(nom);
+}
+
+/* ================================ QR codes =============================== */
+let qrStream = null, qrTimer = null;
+function urlZone(c, z) {
+  return `${location.origin}${location.pathname}?c=${encodeURIComponent(c.nom)}&z=${encodeURIComponent(z)}`;
+}
+
+async function lancerScan() {
+  ouvrirModal('Scanner une zone', `<video id="qrVideo" autoplay playsinline muted></video><p id="qrStatut" class="small muted" style="text-align:center;margin-top:10px">Accès à la caméra…</p>`,
+    `<button class="btn" data-act="fermerModal">Fermer</button>`, { icone: 'scan-line', taille: 'narrow', sousTitre: 'Visez l\'étiquette QR collée sur la zone' });
+  if (!('BarcodeDetector' in window)) {
+    $('#qrStatut').innerHTML = 'Le scan intégré n\'est pas supporté par ce navigateur.<br>Scannez l\'étiquette avec l\'appareil photo du téléphone : le lien ouvre directement la bonne zone.';
+    return;
+  }
+  try {
+    qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const v = $('#qrVideo'); if (!v) return arreterScan();
+    v.srcObject = qrStream; await v.play();
+    $('#qrStatut').textContent = 'Visez le QR code de la zone…';
+    const det = new BarcodeDetector({ formats: ['qr_code'] });
+    qrTimer = setInterval(async () => {
+      try {
+        const v2 = $('#qrVideo'); if (!v2) return arreterScan();
+        const codes = await det.detect(v2);
+        if (codes.length) { const txt = codes[0].rawValue; fermerModal(); traiterCible(txt); }
+      } catch (_e) { /* image pas prête */ }
+    }, 350);
+  } catch (e) { $('#qrStatut').textContent = 'Caméra inaccessible : ' + (e.message || e); }
+}
+function arreterScan() {
+  clearInterval(qrTimer); qrTimer = null;
+  if (qrStream) { qrStream.getTracks().forEach(t => t.stop()); qrStream = null; }
+}
+
+// Formats acceptés : URL ?c=…&z=… (ou chantier / zone / support), « Chantier|Zone », ou zone seule
+function traiterCible(texte) {
+  let cNom = '', zNom = String(texte || '').trim();
+  try {
+    if (/^https?:/i.test(zNom) || zNom.includes('?')) {
+      const u = new URL(zNom, location.href);
+      cNom = u.searchParams.get('c') || u.searchParams.get('chantier') || '';
+      zNom = u.searchParams.get('z') || u.searchParams.get('zone') || u.searchParams.get('support') || '';
+    } else if (zNom.includes('|')) { [cNom, zNom] = zNom.split('|').map(s => s.trim()); }
+  } catch (_e) { /* texte brut */ }
+  if (cNom) {
+    const c = db.chantiers.find(x => x.id === cNom || norm(x.nom) === norm(cNom));
+    if (!c) return toast(`Chantier « ${cNom} » introuvable sur cet appareil`, 'alerte');
+    ui.chantierId = c.id;
+  }
+  if (zNom) {
+    const z = zonesDe(ui.chantierId).find(x => norm(x) === norm(zNom));
+    if (!z) { render(); return toast(`Zone « ${zNom} » introuvable`, 'alerte'); }
+    ui.zone = z; ui.view = 'terrain'; ui.terrainMode = 'liste'; ui.filtreTache = '';
+    toast(`Zone ${z}`, 'succes');
+  }
+  render();
+}
+
+function etiquettesQR() {
+  const c = ch();
+  const zones = zonesDe(c.id);
+  if (!zones.length) return toast('Aucune zone : générez d\'abord la liste terrain.', 'alerte');
+  if (typeof QRCode === 'undefined') return toast('Bibliothèque QR non chargée.', 'erreur');
+  const html = `<div class="qr-sheet">${zones.map((z, i) => `<div class="qr-label"><div class="brand">OMSMK</div><div class="z">${esc(z)}</div><div class="qr-box" id="qrb_%P_${i}"></div><div class="c">${esc(c.nom)}</div></div>`).join('')}</div>`;
+  $('#printArea').innerHTML = html.replace(/%P/g, 'p');
+  ouvrirModal(`Étiquettes QR · ${zones.length} zones`, html.replace(/%P/g, 'm'),
+    `<button class="btn" data-act="fermerModal">Fermer</button><button class="btn primary" data-act="imprimer">${icone('printer')}Imprimer</button>`, { taille: 'wide', icone: 'qr-code', sousTitre: 'Collez une étiquette par zone : le scan ouvre directement la saisie de la zone.' });
+  zones.forEach((z, i) => ['p', 'm'].forEach(k => {
+    const el = document.getElementById(`qrb_${k}_${i}`);
+    if (el) new QRCode(el, { text: urlZone(c, z), width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
+  }));
+}
+

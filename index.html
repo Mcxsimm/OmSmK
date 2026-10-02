@@ -3,13 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>OmSmK – Suivi de chantier</title>
-  <meta name="description" content="Suivi de gros chantiers : BTE, avancement par phase, saisie terrain, journal, réserves.">
-  <meta name="theme-color" content="#1e3a5f">
+  <title>OmSmK — Pilotage de chantiers</title>
+  <meta name="description" content="Pilotage de chantiers d'étanchéité et de façade : BTE, avancement par phase, saisie terrain, journal, réserves, synchronisation d'équipe.">
+  <meta name="theme-color" content="#0e2340">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preload" href="vendor/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/app.css">
+  <script>
+    // Thème choisi par l'utilisateur, appliqué avant l'affichage (évite un flash)
+    try { const t = localStorage.getItem('omsmk_theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (_e) { /* stockage indisponible */ }
+  </script>
 
   <!-- Bibliothèques embarquées (fonctionnent hors-ligne) -->
   <script src="vendor/xlsx.full.min.js" defer></script>
@@ -19,36 +24,52 @@
   <script src="vendor/supabase.js" defer></script>
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-row">
-      <div class="brand">Om<span>Sm</span>K</div>
-      <select id="chantierSelect" class="chantier-select" aria-label="Chantier actif"></select>
-      <span id="netDot" class="net-dot" title="En ligne"></span>
-      <button id="syncBtn" class="user-chip" title="Synchronisation en ligne">☁️</button>
-      <button id="userChip" class="user-chip" title="Changer d'utilisateur">👤</button>
-    </div>
-    <nav class="tabs" id="tabs">
-      <button class="tab" data-view="tableau">📊 Tableau de bord</button>
-      <button class="tab" data-view="terrain">✅ Terrain</button>
-      <button class="tab" data-view="suivi">📈 Suivi hebdo</button>
-      <button class="tab" data-view="bte">🧮 BTE</button>
-      <button class="tab" data-view="journal">📒 Journal</button>
-      <button class="tab" data-view="qualite">🛡️ Qualité</button>
-      <button class="tab" data-view="chantiers">⚙️ Chantiers & données</button>
-    </nav>
-  </header>
+  <div class="app">
+    <aside class="sidebar" id="sidebar" aria-label="Navigation principale">
+      <div class="side-brand">
+        <div class="logo-mark">OS</div>
+        <div class="logo-text">OmSmK<small>Pilotage de chantiers</small></div>
+      </div>
+      <button class="chantier-switch" id="chantierSwitch" aria-haspopup="listbox">
+        <span class="cs-txt"><span class="cs-lbl">Chantier</span><span class="cs-nom" id="chantierNom">—</span></span>
+        <span data-icone="chevrons-up-down"></span>
+      </button>
+      <nav class="side-nav" id="sideNav"></nav>
+      <div class="side-foot" id="sideFoot"></div>
+    </aside>
+    <div class="backdrop" id="backdrop"></div>
 
-  <main id="view"></main>
+    <div class="main">
+      <header class="topbar">
+        <button class="btn ghost icon menu-btn" id="menuBtn" aria-label="Menu"><span data-icone="menu"></span></button>
+        <div class="crumbs" id="crumbs"></div>
+        <div class="top-actions">
+          <button class="sync-pill" id="syncPill" title="Synchronisation en ligne"><span class="dot"></span><span class="lbl">Local</span></button>
+          <button class="btn ghost icon" id="themeBtn" aria-label="Changer de thème" title="Thème clair / sombre"><span data-icone="moon"></span></button>
+        </div>
+      </header>
+      <main class="content" id="view"></main>
+    </div>
+
+    <nav class="bottom-nav" id="bottomNav" aria-label="Navigation rapide"></nav>
+  </div>
 
   <div id="modalRoot"></div>
+  <div id="popRoot"></div>
+  <div class="viz-tip" id="vizTip" role="tooltip"></div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
   <div id="printArea" class="hidden"></div>
-  <div id="toast"></div>
 
   <script src="js/config.js"></script>
+  <script src="js/icones.js"></script>
   <script src="js/referentiel.js"></script>
   <script src="js/calculs.js"></script>
   <script src="js/synchro.js"></script>
   <script src="js/demo.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/graphiques.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/donnees.js"></script>
+  <script src="js/demarrage.js"></script>
 </body>
 </html>

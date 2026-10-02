@@ -1,0 +1,15 @@
+Chantier;Zone;Lot;Tache;Fait;Observation
+Résidence Les Tilleuls;Bât A - Terrasse R+5;Pare-vapeur;Vernis + pare-vapeur;VRAI;
+Résidence Les Tilleuls;Bât A - Terrasse R+5;Hors d'eau;Isolant + 1ère couche;VRAI;
+Résidence Les Tilleuls;Bât A - Terrasse R+5;2nd couche et relevés;2nd couche;FAUX;
+Résidence Les Tilleuls;Bât A - Terrasse R+5;2nd couche et relevés;Relevés;FAUX;
+Résidence Les Tilleuls;Bât A - Terrasse R+5;Finitions;Couvertines;FAUX;
+Résidence Les Tilleuls;Bât B - Terrasse R+3;Pare-vapeur;Vernis + pare-vapeur;VRAI;
+Résidence Les Tilleuls;Bât B - Terrasse R+3;Hors d'eau;Isolant + 1ère couche;FAUX;
+Résidence Les Tilleuls;Bât B - Terrasse R+3;2nd couche et relevés;2nd couche;FAUX;
+Résidence Les Tilleuls;Bât B - Terrasse R+3;2nd couche et relevés;Relevés;FAUX;
+Résidence Les Tilleuls;Bât B - Terrasse R+3;Finitions;Couvertines;FAUX;
+Résidence Les Tilleuls;Bât B - Façade Nord;Support;1ère ossature;FAUX;
+Résidence Les Tilleuls;Bât B - Façade Nord;Isolant et 2nd ossature;Isolant + pare-pluie;FAUX;
+Résidence Les Tilleuls;Bât B - Façade Nord;Peau extérieure;Cassettes;FAUX;
+Résidence Les Tilleuls;Bât B - Façade Nord;Finitions;Couvertines / bavettes;FAUX;

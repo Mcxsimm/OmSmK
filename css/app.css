@@ -756,3 +756,12 @@ tr.clic:hover td { background: var(--surface-2); }
   .creer-item small { display: none; }
   .creer-item b { font-size: 13px; }
 }
+
+/* ----------------------------- Signatures ------------------------------- */
+.sig-liste { display: grid; gap: 16px; }
+.sig-item { display: grid; gap: 8px; }
+.sig-zone { border: 1.5px dashed var(--border-strong); border-radius: 12px; background: #fff; overflow: hidden; }
+.sig-pad { display: block; width: 100%; height: 150px; touch-action: none; cursor: crosshair; background: linear-gradient(transparent calc(100% - 38px), #e4e7ec calc(100% - 38px), #e4e7ec calc(100% - 37px), transparent calc(100% - 37px)); }
+.sig-pied { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 4px 12px; border-top: 1px solid #eef0f3; background: #fafbfc; }
+.sig-pied .xs { color: #667085; }
+.sig-pied .btn { color: #344054; }

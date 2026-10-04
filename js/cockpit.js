@@ -72,7 +72,7 @@ function vJournee() {
 
   const jourLib = d => d === auj ? 'Aujourd\'hui' : d === addDays(auj, 1) ? 'Demain' : new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' });
   let dernierJour = '';
-  const carteAgenda = `<div class="card"><div class="card-head"><h3>${icone('calendar-range')}Agenda</h3><span class="hint">${ag.length} événement(s) · 7 prochains jours</span></div>
+  const carteAgenda = `<div class="card"><div class="card-head"><h3>${icone('calendar-range')}Agenda</h3><button class="btn ghost sm" data-act="agenda" title="Ajouter réunions, échéances et jalons à l'agenda du téléphone">${icone('calendar', 'sm')}Ajouter à mon agenda</button></div>
     ${ag.length ? `<ul class="agenda">${ag.map(e => {
       const sep = e.d !== dernierJour ? `<li class="ag-jour">${jourLib(e.d)}</li>` : '';
       dernierJour = e.d;

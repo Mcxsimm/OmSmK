@@ -17,6 +17,18 @@ const secuDe = (cid, type) => (db.securite || []).filter(s => s.chantierId === c
 const nomK = id => { const k = (db.compagnons || []).find(x => x.id === id); return k ? nomCompagnon(k) : ''; };
 const permisAsurveiller = (cid, auj = aujourdHui()) => secuDe(cid, 'permis').filter(p => p.date <= auj && !(p.surveillance && p.surveillance.fait));
 
+// Personnes appelées à signer un enregistrement sécurité
+function signatairesSecu(s) {
+  const k = id => ({ cle: id, nom: nomK(id), role: ((db.compagnons || []).find(x => x.id === id) || {}).qualification || 'Compagnon' });
+  const ext = String(s.externes || '').split(/[,;\n]/).map(x => x.trim()).filter(Boolean).map(n => ({ cle: 'ext:' + n, nom: n, role: 'Participant' }));
+  if (s.type === 'causerie') return (s.participants || []).map(k).concat(ext, [{ cle: 'animateur', nom: s.animateur || nomUser(), role: 'Animateur' }]);
+  if (s.type === 'accueil') return [s.compagnonId ? Object.assign(k(s.compagnonId), { role: 'Personne accueillie' }) : { cle: 'accueilli', nom: s.nomExterne || '', role: 'Personne accueillie' }, { cle: 'animateur', nom: s.animateur || nomUser(), role: 'Accueil réalisé par' }];
+  if (s.type === 'permis') return [{ cle: 'responsable', nom: s.par || nomUser(), role: 'Délivre le permis' }].concat((s.intervenants || []).map(id => Object.assign(k(id), { role: 'Intervenant' })));
+  if (s.type === 'visite') return [{ cle: 'auteur', nom: s.auteur || nomUser(), role: 'Visite réalisée par' }];
+  return [];
+}
+const nbSignes = s => signatairesSecu(s).filter(x => (s.signatures || {})[x.cle]).length;
+
 // Indicateurs et alertes sécurité d'un chantier
 function etatSecurite(c, auj = aujourdHui()) {
   const tous = secuDe(c.id);
@@ -82,7 +94,7 @@ function ligneSecu(s) {
   const alerteVisite = s.type === 'visite' && Object.values(s.items || {}).includes('nc');
   return `<div class="res-item"><span class="kpi-ico" style="width:34px;height:34px">${icone(d.ic, 'sm')}</span>
     <div><div class="r-desc">${esc(titre)}</div><div class="r-meta"><span>${icone('calendar', 'sm')}${fmtDate(s.date, true)}</span><span class="badge ${s.type === 'evenement' ? 'neg' : alerteVisite ? 'warn' : ''}">${d.court}</span>${meta.filter(Boolean).map(m => `<span>${esc(m)}</span>`).join('')}</div></div>
-    <div class="row" style="flex-wrap:nowrap">${extra}<button class="btn ghost icon sm" data-act="secuEdit" data-id="${esc(s.id)}" aria-label="Modifier">${icone('pencil', 'sm')}</button><button class="btn ghost icon sm" data-act="secuSuppr" data-id="${esc(s.id)}" aria-label="Supprimer">${icone('trash-2', 'sm')}</button></div></div>`;
+    <div class="row" style="flex-wrap:nowrap">${['causerie', 'accueil', 'permis'].includes(s.type) && signatairesSecu(s).length ? `<button class="btn sm ${nbSignes(s) === signatairesSecu(s).length ? '' : 'ghost'}" data-act="secuSigner" data-id="${esc(s.id)}" title="Faire signer">${icone('pencil', 'sm')}${nbSignes(s)}/${signatairesSecu(s).length}</button>` : ''}${extra}<button class="btn ghost icon sm" data-act="secuEdit" data-id="${esc(s.id)}" aria-label="Modifier">${icone('pencil', 'sm')}</button><button class="btn ghost icon sm" data-act="secuSuppr" data-id="${esc(s.id)}" aria-label="Supprimer">${icone('trash-2', 'sm')}</button></div></div>`;
 }
 
 /* ================================ Modales ================================ */
@@ -168,17 +180,24 @@ function emargementPDF(id) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(52, 64, 84);
     const l = doc.splitTextToSize(pdfTxt(s.notes), 182); doc.text(l, 14, y); y += l.length * 4.4 + 6;
   }
-  const ks = (s.participants || []).map(id2 => (db.compagnons || []).find(k => k.id === id2)).filter(Boolean);
-  const lignes = ks.map(k => [nomCompagnon(k), k.qualification || '', k.interim || entreprise().nom || '', '']);
-  String(s.externes || '').split(/[,;\n]/).map(x => x.trim()).filter(Boolean).forEach(x => lignes.push([x, '', '', '']));
+  const sig = s.signatures || {};
+  const sigs = signatairesSecu(s).filter(x => x.cle !== 'animateur');
+  const lignes = sigs.map(x => { const k = (db.compagnons || []).find(c2 => c2.id === x.cle); return [x.nom, k ? k.qualification || '' : '', k ? k.interim || entreprise().nom || '' : '', '']; });
+  const cles = sigs.map(x => x.cle);
   for (let i = 0; i < 3; i++) lignes.push(['', '', '', '']);
   doc.autoTable(Object.assign({}, STYLE_TABLE, {
     startY: y,
     head: [['Nom', 'Qualification', 'Entreprise', 'Signature'].map(pdfTxt)],
     body: lignes.map(l => l.map(pdfTxt)),
     styles: Object.assign({}, STYLE_TABLE.styles, { minCellHeight: 11, valign: 'middle', lineWidth: 0.2 }),
-    columnStyles: { 3: { cellWidth: 55 } }
+    columnStyles: { 3: { cellWidth: 55 } },
+    didDrawCell: d => { if (d.section === 'body' && d.column.index === 3 && sig[cles[d.row.index]]) signaturePDF(doc, sig[cles[d.row.index]], d.cell.x + 1, d.cell.y + 1, d.cell.width - 2, d.cell.height - 2); }
   }));
+  const yA = Math.min(doc.lastAutoTable.finalY + 8, 250);
+  doc.setDrawColor(205, 212, 222); doc.roundedRect(124, yA, 72, 28, 1.5, 1.5);
+  doc.setFontSize(7.5); doc.setTextColor(102, 112, 133); doc.text(pdfTxt('ANIMATEUR'), 127, yA + 5);
+  doc.setFontSize(8.5); doc.setTextColor(16, 24, 40); doc.text(pdfTxt(s.animateur || ''), 127, yA + 10);
+  signaturePDF(doc, sig.animateur, 127, yA + 12, 66, 14);
   piedDocument(doc, `${entreprise().nom || 'OmSmK'}  ·  ${c.nom}  ·  Quart d'heure sécurité du ${fmtDate(s.date)}`);
   doc.save(`Quart_heure_securite_${s.date}_${c.nom.replace(/[^\w-]+/g, '_')}.pdf`);
   toast('Feuille d\'émargement générée', 'succes');
@@ -200,6 +219,13 @@ Object.assign(ACT, {
     save(); render(); toast('Surveillance après travaux enregistrée', 'succes');
   },
   secuPDF: el => emargementPDF(el.dataset.id),
+  secuSigner: el => {
+    const s = (db.securite || []).find(x => x.id === el.dataset.id);
+    if (!s) return;
+    modalSignatures({ titre: `Signatures — ${TYPES_SECU[s.type].lib}`, sousTitre: `${fmtDate(s.date, true)}${s.theme ? ' · ' + esc(s.theme) : s.zone ? ' · ' + esc(s.zone) : ''}`,
+      signataires: signatairesSecu(s), signatures: s.signatures || {},
+      apres: sig => { s.signatures = sig; save(); render(); toast(`${nbSignes(s)} / ${signatairesSecu(s).length} signature(s) enregistrée(s)`, 'succes'); } });
+  },
   secuSave: () => {
     const type = val('scType'), id = val('scId');
     const coches = cl => $$('.' + cl).filter(x => x.checked).map(x => x.value);

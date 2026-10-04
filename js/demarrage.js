@@ -23,7 +23,7 @@ document.addEventListener('input', e => {
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); return ouvrirRecherche(); }
   if (e.key === 'Enter' && e.target.id === 'rcQ') { e.preventDefault(); const x = _resultatsRecherche[0]; if (x) { fermerModal(); x.run(); } return; }
-  if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('tuile')) { e.preventDefault(); return allerA(e.target.dataset.nav); }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('tuile')) { e.preventDefault(); return e.target.dataset.act ? ACT[e.target.dataset.act](e.target, e) : allerA(e.target.dataset.nav); }
   if (e.key !== 'Escape') return;
   if ($('#popRoot').innerHTML) return fermerPopover();
   if (modalOuverte() && !modalVerrou) { if (_resoudreConfirmation) _repondreConfirmation(false); else fermerModal(); }
@@ -88,6 +88,14 @@ document.addEventListener('DOMContentLoaded', () => { Synchro.init().then(() => 
   hydraterIcones();
   render();
   const p = new URLSearchParams(location.search);
+  // Ouverture depuis une notification de rappel : ?c=<chantier>&v=<page>
+  if (p.get('v') && TITRES[p.get('v')]) {
+    if (p.get('c') && db.chantiers.some(x => x.id === p.get('c'))) ui.chantierId = p.get('c');
+    allerA(p.get('v'));
+    history.replaceState({}, document.title, location.pathname);
+    if (!user) modalIdentite(true);
+    return;
+  }
   const cible = p.get('c') || p.get('chantier'), zone = p.get('z') || p.get('zone') || p.get('support');
   if (cible || zone) {
     traiterCible(`${location.origin}${location.pathname}?${p.toString()}`);

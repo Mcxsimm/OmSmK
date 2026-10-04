@@ -27,8 +27,11 @@ jamais portée par la couleur seule (légende, pointillés, étiquettes directes
 | 🧮 **BTE** | Opérations par complexe / ouvrage et phase : métré, cadence (u/j/homme), heures, budget MO, devis, écarts. Bibliothèque des **cadences standard** (simulateurs Étanchéité V10 et Façades V8) avec coefficient chantier. Durée indicative selon la taille de l'équipe. |
 | 📒 **Journal & photos** | Effectif, météo, heures, travaux et événements ; **photos** prises depuis le téléphone (compressées, disponibles hors-ligne, partagées avec l'équipe), rattachées aux entrées de journal et aux réserves, galerie par jour. Déclaration d'**intempérie** avec la liste des bonnes pratiques à vérifier avant de s'arrêter. |
 | 🛡️ **Qualité** | Réserves / OPR (origine, responsable, échéance, levée), **check-list CDT** (20 points, 6 temps forts) et contrôle qualité de fin de chantier. |
-| 🦺 **Sécurité** | Quarts d'heure sécurité avec **feuille d'émargement PDF**, accueils sécurité des nouveaux arrivants, visites sécurité (non-conformités → actions correctives), **permis de feu** avec surveillance 2 h après travaux, registre des accidents et presqu'accidents, jours sans accident. |
+| 🦺 **Sécurité** | Quarts d'heure sécurité avec **feuille d'émargement PDF signée à l'écran**, accueils sécurité des nouveaux arrivants, visites sécurité (non-conformités → actions correctives), **permis de feu** avec surveillance 2 h après travaux, registre des accidents et presqu'accidents, jours sans accident. |
 | ✅ **Plan d'actions** | Toutes les actions du chantier (réunions, sécurité, relances) avec responsable, échéance, retard ; saisie rapide. |
+| 📄 **Rapport mensuel** | PDF d'avancement pour le maître d'œuvre : chiffres clés, avancement du mois par phase, Gantt et délai, effectifs pointés, intempéries, faits marquants du journal, sécurité, qualité, facturation, points en attente, photos du mois, commentaire du conducteur. |
+| ✍️ **Signatures et PV** | Signature au doigt ou au stylet : émargement des quarts d'heure, accueils sécurité, permis de feu ; **PV de réception** (sans / avec réserves / différée, délai de levée) et **PV de levée des réserves** signés par le maître d'ouvrage, le maître d'œuvre et l'entreprise, en PDF. |
+| 📅 **Agenda et rappels** | Ajout à l'agenda du téléphone (fichier .ics) des réunions, échéances d'actions, jalons, livraisons et démarrages de phases, avec rappels intégrés ; notifications sur l'appareil (actions échues, réunion du jour, permis de feu à surveiller, pointage manquant le soir). |
 | 🤝 **Réunions & CR** | Compte rendu de réunion pré-rempli (participants, sujets du CR précédent, avancement, planning, réserves), actions décidées, suivi des actions en cours, prochaine réunion ; **PDF diffusé** par partage ou e-mail aux participants. |
 | 📇 **Annuaire** | Intervenants du chantier par rôle (MOA, MOE, bureau de contrôle, CSPS, entreprises, fournisseurs) : appel et e-mail en un geste, convocation aux réunions. |
 | 💶 **Synthèse financière** | Chiffre d'affaires (marché + avenants), facturé et encaissé, déboursé par poste (main d'œuvre, matériaux, sous-traitance, matériel, divers) : budget BTE / réel ou engagé / fin d'affaire, marge prévue vs marge fin d'affaire, courbe facturation vs dépenses, alerte de retard de facturation. |
@@ -108,6 +111,10 @@ js/securite.js        Quarts d'heure sécurité, accueils, visites, permis de fe
 js/photos.js          Photos (IndexedDB hors-ligne + stockage Supabase de l'équipe)
 js/cockpit.js         « Ma journée » : actions, agenda et alertes de tous les chantiers
 js/navigation.js      Espaces et tuiles, menu, création rapide, recherche (Ctrl+K)
+js/signature.js       Signature à l'écran (doigt, stylet, souris) et insertion dans les PDF
+js/pv.js              PV de réception et de levée des réserves
+js/rapports.js        Rapport mensuel d'avancement pour le maître d'œuvre
+js/agenda.js          Agenda du téléphone (.ics) et notifications de rappel
 js/donnees.js         Imports, exports Excel, rapport PDF, situation, bon de commande et relevé d'heures PDF, QR codes
 js/demarrage.js       Événements et démarrage
 js/icones.js          Icônes Lucide (sous-ensemble)

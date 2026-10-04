@@ -184,7 +184,7 @@ function editeurReunion(c, r) {
       <input class="input" id="raEch" type="date" value="${r.prochaine && r.prochaine.date ? r.prochaine.date : addDays(r.date || auj, 7)}" style="max-width:160px" aria-label="Échéance">
       <button class="btn primary" data-act="reuAjoutAction" data-id="${esc(r.id)}">${icone('plus')}Ajouter</button></div></div>`;
   const suivi = actsSuivi.length ? `<div class="card"><div class="card-head"><h3>Suivi des actions en cours</h3><span class="hint">reprises dans le CR · cochez celles qui sont soldées</span></div>${actsSuivi.map(a => ligneAction(a, { sansSuppr: true })).join('')}</div>` : '';
-  const prochaine = `<div class="card"><div class="card-head"><h3>Prochaine réunion</h3></div><div class="card-body"><div class="form-grid">
+  const prochaine = `<div class="card"><div class="card-head"><h3>Prochaine réunion</h3><button class="btn ghost sm" data-act="agReunion" data-id="${esc(r.id)}">${icone('calendar', 'sm')}Ajouter à l'agenda</button></div><div class="card-body"><div class="form-grid">
       ${champ('reProDate', 'Date', (r.prochaine || {}).date, 'date', `data-change="reuProchaine" data-f="date"`)}
       ${champ('reProHeure', 'Heure', (r.prochaine || {}).heure, 'time', `data-change="reuProchaine" data-f="heure"`)}</div>
       ${zoneTexte('reObs', 'Observations générales / diffusion', r.observations, 'rows="2" data-change="reuChamp" data-f="observations"')}</div></div>`;

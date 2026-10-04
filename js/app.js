@@ -10,7 +10,7 @@ const UI_KEY = 'omsmk_ui';
 const REF = REFERENTIEL;
 
 /* ================================ État =================================== */
-function dbVide() { return { version: 1, chantiers: [], ops: [], suivi: [], taches: [], journal: [], reserves: [], checklists: {}, postes: [], situations: [], commandes: [], compagnons: [], pointages: [], contacts: [], reunions: [], actions: [], securite: [], photos: [] }; }
+function dbVide() { return { version: 1, chantiers: [], ops: [], suivi: [], taches: [], journal: [], reserves: [], checklists: {}, postes: [], situations: [], commandes: [], compagnons: [], pointages: [], contacts: [], reunions: [], actions: [], securite: [], photos: [], pvs: [] }; }
 function chargerDB() {
   const d = lireJSON(STORE_KEY, null);
   return d && Array.isArray(d.chantiers) ? Object.assign(dbVide(), d) : dbVide();
@@ -558,14 +558,16 @@ function vQualite(c) {
   const res = deCh(db.reserves);
   const ouv = res.filter(r => r.statut !== 'levée').length;
   const cdt = nbChecklist(c.id, 'cdt'), fin = nbChecklist(c.id, 'fin');
-  const entete = enTetePage({ eyebrow: 'Qualité & conformité', titre: { reserves: 'Réserves et OPR', cdt: 'Check-list du conducteur de travaux', fin: 'Contrôle de fin de chantier' }[t],
+  const entete = enTetePage({ eyebrow: 'Qualité & conformité', titre: { reserves: 'Réserves et OPR', cdt: 'Check-list du conducteur de travaux', fin: 'Contrôle de fin de chantier', pv: 'Procès-verbaux' }[t],
     actions: t === 'reserves' ? `<button class="btn primary" data-act="resNew">${icone('plus')}Nouvelle réserve</button>` : '' });
   const seg = `<div class="seg" style="margin-bottom:16px">
     <button class="${t === 'reserves' ? 'on' : ''}" data-act="qTab" data-t="reserves">${icone('circle-alert', 'sm')}Réserves <span class="n">${ouv}</span></button>
     <button class="${t === 'cdt' ? 'on' : ''}" data-act="qTab" data-t="cdt">${icone('list-checks', 'sm')}Check-list CDT <span class="n">${cdt.faits}/${cdt.total}</span></button>
-    <button class="${t === 'fin' ? 'on' : ''}" data-act="qTab" data-t="fin">${icone('shield-check', 'sm')}Fin de chantier <span class="n">${fin.faits}/${fin.total}</span></button></div>`;
+    <button class="${t === 'fin' ? 'on' : ''}" data-act="qTab" data-t="fin">${icone('shield-check', 'sm')}Fin de chantier <span class="n">${fin.faits}/${fin.total}</span></button>
+    <button class="${t === 'pv' ? 'on' : ''}" data-act="qTab" data-t="pv">${icone('file-check', 'sm')}PV <span class="n">${pvsDe(c.id).length}</span></button></div>`;
   let corps = '';
-  if (t === 'reserves') {
+  if (t === 'pv') corps = vPVs(c);
+  else if (t === 'reserves') {
     const f = ui.reserveFiltre;
     const auj = aujourdHui();
     const liste = res.filter(r => f === 'toutes' || (f === 'ouvertes' ? r.statut !== 'levée' : r.statut === 'levée'))
@@ -641,9 +643,10 @@ function vPortefeuille() {
 /* =============================== Paramètres ============================== */
 function vParametres() {
   const t = ui.paramTab;
-  const nav = [['equipe', 'users', 'Équipe & synchronisation'], ['entreprise', 'landmark', 'Entreprise'], ['donnees', 'database', 'Données'], ['profil', 'user', 'Profil'], ['apparence', 'sun', 'Apparence'], ['apropos', 'info', 'À propos']];
+  const nav = [['equipe', 'users', 'Équipe & synchronisation'], ['entreprise', 'landmark', 'Entreprise'], ['donnees', 'database', 'Données'], ['profil', 'user', 'Profil'], ['rappels', 'calendar-range', 'Rappels & agenda'], ['apparence', 'sun', 'Apparence'], ['apropos', 'info', 'À propos']];
   let corps = '';
   if (t === 'equipe') corps = vSynchro();
+  if (t === 'rappels') corps = carteRappels();
   if (t === 'donnees') corps = `<div class="card"><div class="card-head"><h3>Importer</h3></div>
       <div class="set-row"><div class="s-txt"><b>BTE standard SMAC (.xlsx)</b><span>Synthèse, opérations de main d'œuvre (métrés, cadences) et suivi hebdomadaire déjà saisi.</span></div><button class="btn" data-act="importFichier">${icone('upload')}Choisir un fichier</button></div>
       <div class="set-row"><div class="s-txt"><b>Liste terrain (.csv / .xlsx)</b><span>Colonnes <code>Chantier;Zone;Lot;Tache;Fait;Observation</code> — « Support » accepté pour « Zone ».</span></div><button class="btn" data-act="importFichier">${icone('upload')}Choisir un fichier</button></div>
@@ -1274,7 +1277,7 @@ function insererOp(op) {
 
 function supprimerChantier(cid) {
   db.chantiers = db.chantiers.filter(c => c.id !== cid);
-  ['ops', 'suivi', 'taches', 'journal', 'reserves', 'postes', 'situations', 'commandes', 'compagnons', 'pointages', 'contacts', 'reunions', 'actions', 'securite', 'photos'].forEach(k => { db[k] = (db[k] || []).filter(x => x.chantierId !== cid); });
+  ['ops', 'suivi', 'taches', 'journal', 'reserves', 'postes', 'situations', 'commandes', 'compagnons', 'pointages', 'contacts', 'reunions', 'actions', 'securite', 'photos', 'pvs'].forEach(k => { db[k] = (db[k] || []).filter(x => x.chantierId !== cid); });
   delete db.checklists[cid];
   if (ui.chantierId === cid) ui.chantierId = db.chantiers[0] ? db.chantiers[0].id : null;
 }

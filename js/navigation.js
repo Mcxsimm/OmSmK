@@ -10,7 +10,7 @@
 function tuile(t) {
   const a = t.action;
   const attrs = a ? (a.act ? `data-act="${a.act}"` : `data-nav="${a.nav}"`) + Object.entries(a.data || {}).map(([k, v]) => ` data-${k}="${esc(v)}"`).join('') : '';
-  return `<div class="tuile ${t.etat || ''}" data-nav="${t.v}" role="link" tabindex="0" aria-label="${esc(t.titre)}">
+  return `<div class="tuile ${t.etat || ''}" ${t.act ? `data-act="${t.act}"` : `data-nav="${t.v}"`} role="link" tabindex="0" aria-label="${esc(t.titre)}">
     <div class="t-haut"><span class="t-ico">${icone(t.ic)}</span>${t.badge ? `<span class="badge ${t.etat === 'alerte' ? 'neg' : t.etat === 'ok' ? 'pos' : ''}">${t.badge}</span>` : ''}<span class="t-fleche">${icone('arrow-right', 'sm')}</span></div>
     <div class="t-titre">${esc(t.titre)}</div>
     <div class="t-val">${t.val}</div>
@@ -94,6 +94,8 @@ function vHubCoordination(c) {
     { v: 'actions', ic: 'list-todo', titre: 'Plan d\'actions', val: `${ouvertes.length} ouverte(s)`, sous: retard.length ? `${retard.length} en retard` : 'aucune action en retard', etat: retard.length ? 'alerte' : '', action: { act: 'actNew', lib: 'Nouvelle action', ic: 'plus' } },
     { v: 'reunions', ic: 'messages-square', titre: 'Réunions & CR', val: pro ? new Date(pro.date + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) + (pro.heure ? ' · ' + pro.heure : '') : (der ? `CR n° ${der.numero}` : 'Aucun CR'), sous: pro ? 'prochaine réunion' : der ? `du ${fmtDate(der.date)}${der.diffuseLe ? ', diffusé' : ', non diffusé'}` : 'premier compte rendu à rédiger',
       etat: der && !der.diffuseLe ? 'alerte' : '', badge: der && !der.diffuseLe ? 'à diffuser' : '', action: { act: 'reuNew', lib: 'Nouveau CR', ic: 'plus' } },
+    { act: 'rapportMensuel', ic: 'file-text', titre: 'Rapport mensuel', val: moisLong(aujourdHui().slice(0, 7)).replace(/^./, x => x.toUpperCase()), sous: 'avancement, planning, effectifs, sécurité, photos — PDF pour le maître d\'œuvre' },
+    { act: 'agenda', ic: 'calendar-range', titre: 'Mon agenda', val: `${evenementsAgenda([c], TYPES_AGENDA.map(x => x[0])).length} événement(s)`, sous: 'réunions, échéances, jalons et livraisons à ajouter au téléphone, avec rappels' },
     { v: 'annuaire', ic: 'contact', titre: 'Annuaire', val: `${ks.length} intervenant(s)`, sous: [...new Set(ks.map(k => k.role))].slice(0, 3).join(' · ') || 'MOA, MOE, CSPS, fournisseurs…', action: { act: 'contactNew', lib: 'Ajouter', ic: 'plus' } }
   ];
   const prochaines = ouvertes.slice(0, 5);
@@ -158,7 +160,10 @@ const CREATIONS = [
   { id: 'causerie', ic: 'shield-alert', t: 'Quart d\'heure sécurité', s: 'thème et émargement', go: () => modalSecu('causerie', null) },
   { id: 'permis', ic: 'flame', t: 'Permis de feu', s: 'travaux par point chaud', go: () => modalSecu('permis', null) },
   { id: 'cr', ic: 'messages-square', t: 'Compte rendu', s: 'réunion de chantier', go: () => { ui.reunionId = null; allerA('reunions'); ACT.reuNew(); } },
-  { id: 'commande', ic: 'shopping-cart', t: 'Commande', s: 'matériaux, matériel', go: () => modalCommande(null) }
+  { id: 'commande', ic: 'shopping-cart', t: 'Commande', s: 'matériaux, matériel', go: () => modalCommande(null) },
+  { id: 'rapport', ic: 'file-text', t: 'Rapport mensuel', s: 'PDF d\'avancement pour le MOE', go: () => modalRapportMensuel() },
+  { id: 'pv', ic: 'file-check', t: 'PV de réception', s: 'avec signatures à l\'écran', go: () => { ui.qualiteTab = 'pv'; allerA('qualite'); modalPV('reception', null); } },
+  { id: 'agenda', ic: 'calendar-range', t: 'Ajouter à mon agenda', s: 'réunions, échéances, rappels', go: () => modalAgenda() }
 ];
 function menuCreer() {
   const c = ch();

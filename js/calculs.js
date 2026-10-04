@@ -404,3 +404,104 @@ function actionsDe(base, cid) {
   return (base.actions || []).filter(a => !cid || a.chantierId === cid)
     .sort((a, b) => (actionOuverte(b) - actionOuverte(a)) || (a.echeance || '9999').localeCompare(b.echeance || '9999'));
 }
+
+/* ============================ Rapport mensuel ============================= */
+const finDuMois = m => { const [a, mm] = m.split('-').map(Number); return isoLocal(new Date(a, mm, 0)); };
+const moisPrecedent = m => { const [a, mm] = m.split('-').map(Number); return mm === 1 ? `${a - 1}-12` : `${a}-${String(mm - 1).padStart(2, '0')}`; };
+
+// Chiffres d'un mois pour le rapport d'avancement au maître d'œuvre
+function syntheseMois(base, cid, mois) {
+  const du = mois + '-01', au = finDuMois(mois);
+  const avant = calcSuivi(base, cid, addDays(du, -1)), apres = calcSuivi(base, cid, au);
+  const pt = synthesePointage(base, cid, du, au);
+  const c = base.chantiers.find(x => x.id === cid);
+  const hj = hjDe(c);
+  const joursPointes = new Set(pt.pointages.filter(p => p.statut === 'present').map(p => p.date));
+  const journal = (base.journal || []).filter(j => j.chantierId === cid && j.date >= du && j.date <= au).sort((a, b) => a.date.localeCompare(b.date));
+  const joursIntemp = new Set([...journal.filter(j => j.intemperie).map(j => j.date), ...pt.pointages.filter(p => p.statut === 'intemperie' || num(p.intemp) >= hj).map(p => p.date)]);
+  const res = (base.reserves || []).filter(r => r.chantierId === cid);
+  const secu = (base.securite || []).filter(s => s.chantierId === cid && s.date >= du && s.date <= au);
+  return {
+    du, au,
+    avancement: { debut: avant.tot.pct, fin: apres.tot.pct, gain: apres.tot.pct - avant.tot.pct },
+    phases: apres.rows.map((r, i) => ({ ouvrage: r.ouvrage, phase: r.phase, debut: avant.rows[i] ? avant.rows[i].pct : 0, fin: r.pct })),
+    effectif: { heures: pt.tot.heures, joursHomme: pt.tot.heures / hj, jours: joursPointes.size, moyen: joursPointes.size ? pt.tot.heures / hj / joursPointes.size : 0, intemp: pt.tot.intemp },
+    joursIntemperie: joursIntemp.size,
+    journal,
+    reserves: { creees: res.filter(r => r.creeLe >= du && r.creeLe <= au).length, levees: res.filter(r => r.leveeLe && r.leveeLe >= du && r.leveeLe <= au).length, ouvertes: res.filter(r => r.statut !== 'levée' && (r.creeLe || '') <= au).length },
+    securite: { causeries: secu.filter(s => s.type === 'causerie').length, accueils: secu.filter(s => s.type === 'accueil').length, visites: secu.filter(s => s.type === 'visite').length, permis: secu.filter(s => s.type === 'permis').length,
+      accidents: secu.filter(s => s.type === 'evenement' && /^Accident/.test(s.nature || '')).length }
+  };
+}
+
+/* ========================= Agenda (iCalendar .ics) ======================== */
+const icsTexte = s => String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const icsDate = d => d.replace(/-/g, '');
+const icsDateHeure = (d, h) => `${icsDate(d)}T${(h || '08:00').replace(':', '')}00`;
+// Lignes de 75 octets au plus (repli RFC 5545), sans couper un caractère accentué
+function icsPlier(ligne) {
+  const octets = ch_ => { const n = ch_.codePointAt(0); return n < 0x80 ? 1 : n < 0x800 ? 2 : n < 0x10000 ? 3 : 4; };
+  const out = [];
+  let cour = '', taille = 0;
+  for (const ch_ of ligne) {
+    const o = octets(ch_);
+    if (taille + o > (out.length ? 74 : 75)) { out.push(cour); cour = ''; taille = 0; }
+    cour += ch_; taille += o;
+  }
+  out.push(cour);
+  return out.join('\r\n ');
+}
+const VTIMEZONE_PARIS = ['BEGIN:VTIMEZONE', 'TZID:Europe/Paris',
+  'BEGIN:DAYLIGHT', 'TZOFFSETFROM:+0100', 'TZOFFSETTO:+0200', 'TZNAME:CEST', 'DTSTART:19700329T020000', 'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU', 'END:DAYLIGHT',
+  'BEGIN:STANDARD', 'TZOFFSETFROM:+0200', 'TZOFFSETTO:+0100', 'TZNAME:CET', 'DTSTART:19701025T030000', 'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU', 'END:STANDARD',
+  'END:VTIMEZONE'];
+/* evenements : [{ uid, titre, date, heure?, duree? (min), description?, lieu?, rappel? (min avant ; jour entier : la veille à 17 h par défaut) }] */
+function genererICS(evenements, nomCalendrier = 'OmSmK', horodatage = new Date()) {
+  const stamp = horodatage.toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+  const l = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//OmSmK//Pilotage de chantiers//FR', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', `X-WR-CALNAME:${icsTexte(nomCalendrier)}`];
+  if (evenements.some(e => e.heure)) l.push(...VTIMEZONE_PARIS);
+  evenements.forEach(e => {
+    l.push('BEGIN:VEVENT', `UID:${e.uid}@omsmk`, `DTSTAMP:${stamp}`, `SUMMARY:${icsTexte(e.titre)}`);
+    if (e.heure) {
+      l.push(`DTSTART;TZID=Europe/Paris:${icsDateHeure(e.date, e.heure)}`);
+      const [h, mi] = e.heure.split(':').map(Number);
+      const fin = h * 60 + mi + (e.duree || 60);
+      l.push(`DTEND;TZID=Europe/Paris:${icsDate(e.date)}T${String(Math.floor(fin / 60) % 24).padStart(2, '0')}${String(fin % 60).padStart(2, '0')}00`);
+    } else {
+      l.push(`DTSTART;VALUE=DATE:${icsDate(e.date)}`, `DTEND;VALUE=DATE:${icsDate(addDays(e.date, 1))}`, 'TRANSP:TRANSPARENT');
+    }
+    if (e.lieu) l.push(`LOCATION:${icsTexte(e.lieu)}`);
+    if (e.description) l.push(`DESCRIPTION:${icsTexte(e.description)}`);
+    const rappel = e.rappel ?? (e.heure ? 60 : 7 * 60);   // jour entier : veille 17 h (7 h avant minuit)
+    l.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsTexte(e.titre)}`, `TRIGGER:-PT${rappel}M`, 'END:VALARM', 'END:VEVENT');
+  });
+  l.push('END:VCALENDAR');
+  return l.map(icsPlier).join('\r\n') + '\r\n';
+}
+
+/* ================================ Rappels ================================= */
+// Rappels à afficher maintenant (les déjà affichés sont filtrés par l'appelant)
+function rappelsDus(base, maintenant = new Date()) {
+  const auj = isoLocal(maintenant), demain = addDays(auj, 1);
+  const heure = maintenant.getHours() * 60 + maintenant.getMinutes();
+  const out = [];
+  (base.chantiers || []).forEach(c => {
+    const nom = c.nom;
+    (base.actions || []).filter(a => a.chantierId === c.id && actionOuverte(a) && a.echeance && a.echeance <= auj)
+      .forEach(a => out.push({ id: `act|${a.id}|${auj}`, titre: a.echeance < auj ? 'Action en retard' : 'Action à faire aujourd\'hui', corps: `${a.libelle}${a.responsable ? ' — ' + a.responsable : ''} (${nom})`, vue: 'actions', cid: c.id }));
+    const reus = (base.reunions || []).filter(r => r.chantierId === c.id).sort((a, b) => num(b.numero) - num(a.numero));
+    const pro = reus[0] && reus[0].prochaine;
+    if (pro && pro.date === auj) out.push({ id: `reu|${reus[0].id}|${auj}`, titre: 'Réunion aujourd\'hui', corps: `${nom}${pro.heure ? ' à ' + pro.heure : ''}${reus[0].lieu ? ' — ' + reus[0].lieu : ''}`, vue: 'reunions', cid: c.id });
+    if (pro && pro.date === demain && heure >= 16 * 60) out.push({ id: `reu|${reus[0].id}|${demain}`, titre: 'Réunion demain', corps: `${nom}${pro.heure ? ' à ' + pro.heure : ''}`, vue: 'reunions', cid: c.id });
+    (base.securite || []).filter(s => s.chantierId === c.id && s.type === 'permis' && s.date <= auj && !(s.surveillance && s.surveillance.fait))
+      .forEach(s => out.push({ id: `pf|${s.id}|${auj}`, titre: 'Permis de feu : surveillance à confirmer', corps: `${nom}${s.zone ? ' — ' + s.zone : ''}`, vue: 'securite', cid: c.id }));
+    const equipe = (base.compagnons || []).filter(k => k.chantierId === c.id && k.actif !== false);
+    const enCours = c.dateDebut && c.dateDebut <= auj && (!c.dateFin || c.dateFin >= auj) && estOuvre(auj);
+    if (enCours && equipe.length && heure >= 17 * 60) {
+      const pointes = new Set((base.pointages || []).filter(p => p.chantierId === c.id && p.date === auj).map(p => p.compagnonId));
+      const manq = equipe.filter(k => !pointes.has(k.id)).length;
+      if (manq) out.push({ id: `pt|${c.id}|${auj}`, titre: 'Pointage du jour à faire', corps: `${nom} : ${manq} compagnon(s) non pointé(s)`, vue: 'pointage', cid: c.id });
+    }
+  });
+  return out;
+}

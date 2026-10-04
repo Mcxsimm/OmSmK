@@ -6,7 +6,10 @@ Excellence Opérationnelle SMAC : BTE standard, cadences cibles, suivi hebdomada
 Elle fonctionne **hors-ligne** sur smartphone, tablette ou PC, sans serveur ni compte.
 
 ## Interface
-Navigation latérale (pilotage, terrain, organisation), sélecteur de chantier avec recherche, navigation basse sur mobile,
+Pas de longue liste de menus : cinq **espaces** dans la barre du haut (Accueil, Chantier, Terrain, Coordination, Gestion).
+Chaque espace s'ouvre sur une page de **tuiles interactives** (chiffre clé, état, action rapide) et propose ses pages en onglets.
+Bouton **+** de création rapide (pointage, photo, action, réserve, quart d'heure sécurité, compte rendu…), **recherche** de tout
+(pages, chantiers, actions, intervenants, compagnons) avec Ctrl+K, sélecteur de chantier, barre du bas sur mobile,
 thème clair / sombre, graphiques interactifs (courbe d'avancement réel vs prévu, écarts d'heures par phase), vue portefeuille
 multi-chantiers et rapport PDF mis en page. Palette des graphiques validée pour les daltoniens ; l'identité des séries n'est
 jamais portée par la couleur seule (légende, pointillés, étiquettes directes).
@@ -104,6 +107,7 @@ js/coordination.js    Annuaire, plan d'actions, réunions et comptes rendus PDF
 js/securite.js        Quarts d'heure sécurité, accueils, visites, permis de feu, accidents
 js/photos.js          Photos (IndexedDB hors-ligne + stockage Supabase de l'équipe)
 js/cockpit.js         « Ma journée » : actions, agenda et alertes de tous les chantiers
+js/navigation.js      Espaces et tuiles, menu, création rapide, recherche (Ctrl+K)
 js/donnees.js         Imports, exports Excel, rapport PDF, situation, bon de commande et relevé d'heures PDF, QR codes
 js/demarrage.js       Événements et démarrage
 js/icones.js          Icônes Lucide (sous-ensemble)

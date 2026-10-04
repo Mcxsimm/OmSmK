@@ -54,11 +54,10 @@ function vJournee() {
     sous: [sousInfo('briefcase', `${actifs.length} chantier(s) actif(s)`), retard.length ? `<span class="badge neg">${retard.length} action(s) en retard</span>` : '<span class="badge pos">Aucune action en retard</span>'],
     actions: `<button class="btn" data-nav="portefeuille">${icone('briefcase')}Portefeuille</button><button class="btn primary" data-act="cpNouvelleAction">${icone('plus')}Nouvelle action</button>` });
 
-  const kpis = `<div class="kpis">
-    <div class="card kpi"><div class="kpi-top"><span class="kpi-lbl">Actions en retard</span><span class="kpi-ico">${icone('list-todo')}</span></div><div class="kpi-val ${retard.length ? 'neg' : ''}">${retard.length}</div><div class="kpi-sub">${ouvertes.length} action(s) ouverte(s) au total</div></div>
-    <div class="card kpi"><div class="kpi-top"><span class="kpi-lbl">À échéance sous 7 jours</span><span class="kpi-ico">${icone('calendar')}</span></div><div class="kpi-val">${semaine.length}</div><div class="kpi-sub">${semaine.filter(a => a.echeance === auj).length} pour aujourd'hui</div></div>
-    <div class="card kpi"><div class="kpi-top"><span class="kpi-lbl">Alertes importantes</span><span class="kpi-ico">${icone('triangle-alert')}</span></div><div class="kpi-val ${crit.length ? 'neg' : ''}">${crit.length}</div><div class="kpi-sub">${al.length} point(s) d'attention en tout</div></div>
-    <div class="card kpi"><div class="kpi-top"><span class="kpi-lbl">Agenda de la semaine</span><span class="kpi-ico">${icone('calendar-range')}</span></div><div class="kpi-val">${ag.length}</div><div class="kpi-sub">réunions, livraisons, jalons, échéances</div></div>
+  const kpis = `<div class="resume">
+    <div><span>Actions en retard</span><b class="${retard.length ? 'neg' : ''}">${retard.length}</b><small>${ouvertes.length} action(s) ouverte(s) au total</small></div>
+    <div><span>À échéance sous 7 jours</span><b>${semaine.length}</b><small>${semaine.filter(a => a.echeance === auj).length} pour aujourd'hui</small></div>
+    <div><span>Alertes importantes</span><b class="${crit.length ? 'neg' : ''}">${crit.length}</b><small>${al.length} point(s) d'attention sur ${db.chantiers.length} chantier(s)</small></div>
   </div>`;
 
   const aFaire = retard.concat(ouvertes.filter(a => !actionEnRetard(a, auj) && (!a.echeance || a.echeance <= addDays(auj, 7)))).slice(0, 14);
@@ -73,7 +72,7 @@ function vJournee() {
 
   const jourLib = d => d === auj ? 'Aujourd\'hui' : d === addDays(auj, 1) ? 'Demain' : new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' });
   let dernierJour = '';
-  const carteAgenda = `<div class="card"><div class="card-head"><h3>${icone('calendar-range')}Agenda</h3><span class="hint">7 prochains jours</span></div>
+  const carteAgenda = `<div class="card"><div class="card-head"><h3>${icone('calendar-range')}Agenda</h3><span class="hint">${ag.length} événement(s) · 7 prochains jours</span></div>
     ${ag.length ? `<ul class="agenda">${ag.map(e => {
       const sep = e.d !== dernierJour ? `<li class="ag-jour">${jourLib(e.d)}</li>` : '';
       dernierJour = e.d;
@@ -82,9 +81,9 @@ function vJournee() {
     }).join('')}</ul>` : '<div class="card-body muted">Rien de prévu. Programmez la prochaine réunion depuis le dernier compte rendu, et les jalons depuis le planning.</div>'}</div>`;
 
   const carteAlertes = `<div class="card"><div class="card-head"><h3>${icone('triangle-alert')}Points d'attention</h3><span class="badge ${al.length ? 'warn' : 'pos'}">${al.length || 'Aucun'}</span></div>
-    ${al.length ? `<ul class="attention-list">${al.slice(0, 12).map(a => `<li><span class="sev ${a.sev}">${icone(a.ic, 'sm')}</span><div class="grow"><div class="strong">${a.t}</div><div class="small muted">${a.d}</div>${db.chantiers.length > 1 ? `<div style="margin-top:4px">${badgeChantier(a.c)}</div>` : ''}</div>
+    ${al.length ? `<ul class="attention-list">${(ui.cpTout ? al : al.slice(0, 5)).map(a => `<li><span class="sev ${a.sev}">${icone(a.ic, 'sm')}</span><div class="grow"><div class="strong">${a.t}</div><div class="small muted">${a.d}</div>${db.chantiers.length > 1 ? `<div style="margin-top:4px">${badgeChantier(a.c)}</div>` : ''}</div>
       ${a.go ? `<button class="btn ghost sm" data-act="cpAller" data-id="${esc(a.c.id)}" data-v="${a.go}" ${a.date ? `data-d="${a.date}"` : ''} aria-label="Ouvrir">${icone('chevron-right', 'sm')}</button>` : ''}</li>`).join('')}</ul>
-      ${al.length > 12 ? `<div class="card-foot small muted">et ${al.length - 12} autre(s)</div>` : ''}` : `<div class="card-body row"><span class="sev good">${icone('circle-check', 'sm')}</span><span class="muted">Tous les chantiers sont sous contrôle.</span></div>`}</div>`;
+      ${al.length > 5 ? `<div class="card-foot row"><span class="grow"></span><button class="btn ghost sm" data-act="cpTout">${ui.cpTout ? 'Réduire' : `Tout afficher (${al.length})`}</button></div>` : ''}` : `<div class="card-body row"><span class="sev good">${icone('circle-check', 'sm')}</span><span class="muted">Tous les chantiers sont sous contrôle.</span></div>`}</div>`;
 
   const lignes = actifs.map(c => {
     const s = calcSuivi(db, c.id), pl = calcPlanning(db, c.id), st = statutChantier(c);
@@ -120,5 +119,6 @@ Object.assign(ACT, {
     creerAction({ chantierId: val('cpCh'), libelle, echeance: val('cpEch'), responsable: nomUser() });
     save(); render(); toast('Action ajoutée', 'succes'); setTimeout(() => { const i = $('#cpLib'); if (i) i.focus(); }, 30);
   },
+  cpTout: () => { ui.cpTout = !ui.cpTout; render(); },
   cpNouvelleAction: () => { if (!ui.chantierId && db.chantiers[0]) ui.chantierId = db.chantiers[0].id; const i = $('#cpLib'); if (i) { i.focus(); i.scrollIntoView({ block: 'center' }); } else modalAction(null); }
 });

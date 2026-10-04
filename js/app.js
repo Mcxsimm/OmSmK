@@ -59,59 +59,55 @@ const numeroReserve = (r) => {
 };
 
 /* ============================ Navigation ================================= */
-const NAV = [
-  { groupe: 'Pilotage', items: [
-    { v: 'journee', ic: 'house', t: 'Ma journée' },
-    { v: 'tableau', ic: 'layout-dashboard', t: 'Tableau de bord' },
-    { v: 'planning', ic: 'chart-gantt', t: 'Planning' },
-    { v: 'suivi', ic: 'trending-up', t: 'Suivi hebdomadaire' },
-    { v: 'bte', ic: 'calculator', t: 'Budget (BTE)' }
-  ]},
-  { groupe: 'Terrain', items: [
-    { v: 'pointage', ic: 'clock', t: 'Pointage journalier' },
-    { v: 'terrain', ic: 'clipboard-check', t: 'Saisie terrain' },
-    { v: 'journal', ic: 'notebook-pen', t: 'Journal & photos' },
-    { v: 'qualite', ic: 'shield-check', t: 'Qualité & réserves' },
-    { v: 'securite', ic: 'shield-alert', t: 'Sécurité' }
-  ]},
-  { groupe: 'Coordination', items: [
-    { v: 'actions', ic: 'list-todo', t: 'Plan d\'actions' },
-    { v: 'reunions', ic: 'messages-square', t: 'Réunions & CR' },
-    { v: 'annuaire', ic: 'contact', t: 'Annuaire' }
-  ]},
-  { groupe: 'Gestion', items: [
-    { v: 'finances', ic: 'wallet', t: 'Synthèse financière' },
-    { v: 'situations', ic: 'receipt', t: 'Situations mensuelles' },
-    { v: 'commandes', ic: 'shopping-cart', t: 'Commandes & achats' }
-  ]},
-  { groupe: 'Organisation', items: [
-    { v: 'portefeuille', ic: 'briefcase', t: 'Portefeuille' },
-    { v: 'parametres', ic: 'settings', t: 'Paramètres' }
-  ]}
+/* Navigation par espaces : chaque espace ouvre une page d'accueil (tuiles) et
+   propose ses pages en onglets ; pas de longue liste de menus. */
+const ESPACES = [
+  { id: 'accueil', t: 'Accueil', ic: 'house', pages: [['journee', 'Ma journée', 'house'], ['portefeuille', 'Portefeuille', 'briefcase']] },
+  { id: 'chantier', t: 'Chantier', ic: 'building-2', pages: [['hubChantier', 'Vue d\'ensemble', 'layout-dashboard'], ['tableau', 'Indicateurs', 'gauge'], ['planning', 'Planning', 'chart-gantt'], ['suivi', 'Suivi hebdo', 'trending-up'], ['bte', 'Budget BTE', 'calculator']] },
+  { id: 'terrain', t: 'Terrain', ic: 'hard-hat', pages: [['hubTerrain', 'Vue d\'ensemble', 'layout-dashboard'], ['pointage', 'Pointage', 'clock'], ['terrain', 'Saisie terrain', 'clipboard-check'], ['journal', 'Journal & photos', 'camera'], ['qualite', 'Qualité', 'shield-check'], ['securite', 'Sécurité', 'shield-alert']] },
+  { id: 'coordination', t: 'Coordination', ic: 'messages-square', pages: [['hubCoordination', 'Vue d\'ensemble', 'layout-dashboard'], ['actions', 'Actions', 'list-todo'], ['reunions', 'Réunions & CR', 'messages-square'], ['annuaire', 'Annuaire', 'contact']] },
+  { id: 'gestion', t: 'Gestion', ic: 'wallet', pages: [['hubGestion', 'Vue d\'ensemble', 'layout-dashboard'], ['finances', 'Synthèse financière', 'wallet'], ['situations', 'Situations', 'receipt'], ['commandes', 'Commandes', 'shopping-cart']] }
 ];
-const TITRES = Object.fromEntries(NAV.flatMap(g => g.items.map(i => [i.v, i.t])));
+const TITRES = Object.assign(Object.fromEntries(ESPACES.flatMap(e => e.pages.map(([v, t]) => [v, t]))), { parametres: 'Paramètres' });
+const espaceDe = v => ESPACES.find(e => e.pages.some(p => p[0] === v)) || null;
 const VUES_SANS_CHANTIER = ['journee', 'portefeuille', 'parametres'];
+
+// Pastilles de comptage (retards, alertes) par page
+function compteurs() {
+  const c = ch(), auj = aujourdHui();
+  const n = {};
+  if (c) {
+    n.qualite = deCh(db.reserves).filter(r => r.statut !== 'levée').length;
+    n.actions = actionsDe(db, c.id).filter(a => actionEnRetard(a, auj)).length;
+    n.securite = permisAsurveiller(c.id).length;
+    n.planning = calcPlanning(db, c.id, auj).rows.filter(r => r.statut === 'retard').length;
+  }
+  n.journee = actionsDe(db).filter(a => actionEnRetard(a, auj) && db.chantiers.some(x => x.id === a.chantierId)).length;
+  n.portefeuille = 0;
+  return n;
+}
 
 function renderShell() {
   const c = ch();
   $('#chantierNom').textContent = c ? c.nom : 'Aucun chantier';
-  const ouvertes = c ? deCh(db.reserves).filter(r => r.statut !== 'levée').length : 0;
-  const auj = aujourdHui();
-  const actRetard = c ? actionsDe(db, c.id).filter(a => actionEnRetard(a, auj)).length : 0;
-  const actRetardTous = actionsDe(db).filter(a => actionEnRetard(a, auj) && db.chantiers.some(x => x.id === a.chantierId)).length;
-  const surv = c ? permisAsurveiller(c.id).length : 0;
-  const compteur = v => ({ qualite: [ouvertes, 'alert'], actions: [actRetard, 'alert'], journee: [actRetardTous, 'alert'], securite: [surv, 'alert'], portefeuille: [db.chantiers.length, ''] })[v] || [0, ''];
-  $('#sideNav').innerHTML = NAV.map(g => `<div class="nav-group"><div class="nav-group-title">${g.groupe}</div>${g.items.map(i =>
-    `<button class="nav-item ${ui.view === i.v ? 'active' : ''}" data-nav="${i.v}">${icone(i.ic)}<span>${i.t}</span>${compteur(i.v)[0] ? `<span class="count ${compteur(i.v)[1]}">${compteur(i.v)[0]}</span>` : ''}</button>`).join('')}</div>`).join('');
-  $('#sideFoot').innerHTML = `<button class="side-user" data-act="identite"><span class="avatar">${initiales(nomUser())}</span>
-    <span class="grow"><span class="u-nom" style="display:block">${esc(nomUser() || 'Utilisateur')}</span><span class="u-role">${esc(user && user.role || 'Profil non renseigné')}</span></span>${icone('pencil', 'sm')}</button>`;
-  const mob = [['journee', 'house', 'Journée'], ['pointage', 'clock', 'Pointage'], ['journal', 'camera', 'Journal'], ['actions', 'list-todo', 'Actions']];
-  $('#bottomNav').innerHTML = mob.map(([v, ic, t]) => `<button class="${ui.view === v ? 'active' : ''}" data-nav="${v}">${icone(ic)}<span>${t}</span></button>`).join('')
-    + `<button data-act="menuMobile">${icone('menu')}<span>Plus</span></button>`;
-  $('#crumbs').innerHTML = (c && !VUES_SANS_CHANTIER.includes(ui.view) ? `<span>${esc(c.nom)}</span>${icone('chevron-right', 'sm')}` : '') + `<b>${esc(TITRES[ui.view] || '')}</b>`;
+  const esp = espaceDe(ui.view);
+  const n = compteurs();
+  const totalEsp = e => e.pages.reduce((t, [v]) => t + (n[v] || 0), 0);
+  $('#espaces').innerHTML = ESPACES.map(e => `<button class="esp ${esp && esp.id === e.id ? 'on' : ''}" data-act="espace" data-e="${e.id}">${esc(e.t)}${totalEsp(e) ? `<span class="pastille">${totalEsp(e)}</span>` : ''}</button>`).join('');
+  const sub = $('#subnav');
+  if (esp && esp.pages.length > 1 && !(esp.id !== 'accueil' && !c)) {
+    sub.innerHTML = `<div class="subnav-in">${esp.pages.map(([v, t, ic]) => `<button class="${ui.view === v ? 'on' : ''}" data-nav="${v}">${icone(ic, 'sm')}<span>${esc(t)}</span>${n[v] ? `<span class="pastille">${n[v]}</span>` : ''}</button>`).join('')}</div>`;
+    sub.classList.remove('hidden');
+  } else { sub.innerHTML = ''; sub.classList.add('hidden'); }
+  const mob = [['accueil', 'house', 'Accueil'], ['chantier', 'building-2', 'Chantier'], null, ['terrain', 'hard-hat', 'Terrain'], ['menu', 'menu', 'Menu']];
+  $('#bottomNav').innerHTML = mob.map(m => m === null
+    ? `<button class="bn-creer" data-act="creer" aria-label="Créer">${icone('plus')}</button>`
+    : `<button class="${(esp && esp.id === m[0]) ? 'active' : ''}" data-act="${m[0] === 'menu' ? 'menuMobile' : 'espace'}" data-e="${m[0]}">${icone(m[1])}<span>${m[2]}</span>${m[0] !== 'menu' && ESPACES.find(e => e.id === m[0]) && totalEsp(ESPACES.find(e => e.id === m[0])) ? '<i class="bn-dot"></i>' : ''}</button>`).join('');
+  $('#userBtn').innerHTML = `<span class="avatar">${initiales(nomUser())}</span>`;
   renderSyncPill();
   const sombre = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
   $('#themeBtn').innerHTML = icone(sombre ? 'sun' : 'moon');
+  document.title = `${TITRES[ui.view] || 'OmSmK'}${c && !VUES_SANS_CHANTIER.includes(ui.view) ? ' · ' + c.nom : ''} — OmSmK`;
 }
 
 function renderSyncPill() {
@@ -129,7 +125,7 @@ function renderSyncPill() {
 }
 
 const VUES = { tableau: vTableau, terrain: vTerrain, suivi: vSuivi, bte: vBTE, journal: vJournal, qualite: vQualite, portefeuille: vPortefeuille, parametres: vParametres, finances: c => vFinances(c), situations: c => vSituations(c), commandes: c => vCommandes(c), pointage: c => vPointage(c),
-  journee: () => vJournee(), planning: c => vPlanning(c), securite: c => vSecurite(c), actions: c => vActions(c), reunions: c => vReunions(c), annuaire: c => vAnnuaire(c) };
+  journee: () => vJournee(), hubChantier: c => vHubChantier(c), hubTerrain: c => vHubTerrain(c), hubCoordination: c => vHubCoordination(c), hubGestion: c => vHubGestion(c), planning: c => vPlanning(c), securite: c => vSecurite(c), actions: c => vActions(c), reunions: c => vReunions(c), annuaire: c => vAnnuaire(c) };
 
 function render() {
   if (!ch() && db.chantiers.length) ui.chantierId = db.chantiers[0].id;
@@ -146,7 +142,6 @@ function render() {
 
 function allerA(vue) {
   ui.view = vue;
-  $('#sidebar').classList.remove('open'); $('#backdrop').classList.remove('show');
   fermerPopover();
   render();
   scrollTo(0, 0);
@@ -915,7 +910,7 @@ const ACT = {
   fermerModal,
   confirmOui: () => _repondreConfirmation(true),
   confirmNon: () => _repondreConfirmation(false),
-  menuMobile: () => { $('#sidebar').classList.add('open'); $('#backdrop').classList.add('show'); },
+  menuMobile: () => menuGeneral(),
   identite: () => modalIdentite(false),
   saveIdentite: () => {
     const prenom = val('idPrenom'), nom = val('idNom');
@@ -935,7 +930,7 @@ const ACT = {
   // Chantiers
   chantierNew: () => { fermerPopover(); modalChantier(null); },
   chantierEdit: (el, ev) => { ev.stopPropagation(); modalChantier(db.chantiers.find(c => c.id === el.dataset.id)); },
-  chantierOuvrir: el => { ui.chantierId = el.dataset.id; ui.zone = null; fermerPopover(); allerA(VUES_SANS_CHANTIER.includes(ui.view) ? 'tableau' : ui.view); },
+  chantierOuvrir: el => { ui.chantierId = el.dataset.id; ui.zone = null; fermerPopover(); allerA(VUES_SANS_CHANTIER.includes(ui.view) && ui.view !== 'journee' ? 'hubChantier' : ui.view); },
   chantierSuppr: async (el, ev) => {
     ev.stopPropagation();
     const c = db.chantiers.find(x => x.id === el.dataset.id);

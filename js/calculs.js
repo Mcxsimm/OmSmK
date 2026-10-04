@@ -299,3 +299,108 @@ function serieFinanciere(base, cid) {
   }
   return pts;
 }
+
+/* ================================ Planning ================================
+   Durée d'une phase (jours ouvrés) = heures budgétées ÷ (effectif × heures par jour).
+   Une phase est en retard si, à date, son % réalisé est inférieur de plus de 10 points
+   au % attendu (linéaire entre ses dates prévues), ou si sa date de fin est dépassée. */
+const estOuvre = s => { const j = new Date(s + 'T00:00:00').getDay(); return j !== 0 && j !== 6; };
+// Nombre de jours ouvrés (lundi → vendredi) entre deux dates incluses
+function joursOuvres(du, au) {
+  if (!du || !au || au < du) return 0;
+  let n = 0;
+  for (let d = du, i = 0; d <= au && i < 4000; d = addDays(d, 1), i++) if (estOuvre(d)) n++;
+  return n;
+}
+// Date du n-ième jour ouvré à partir de « du » (n = 1 : premier jour ouvré à partir de du)
+function ajouterJoursOuvres(du, n) {
+  let d = du;
+  while (!estOuvre(d)) d = addDays(d, 1);
+  for (let k = 1; k < Math.max(1, Math.ceil(n)); k++) { d = addDays(d, 1); while (!estOuvre(d)) d = addDays(d, 1); }
+  return d;
+}
+const dureePhase = (budget, effectif, hj) => Math.max(1, Math.ceil(num(budget) / (Math.max(1, num(effectif)) * (num(hj) || HEURES_JOUR_DEFAUT)) - 1e-9));
+
+// Planning enchaîné : phases successives, chevauchement en % de la durée de la phase précédente
+function planningAuto(base, cid, { debut, effectif = 2, chevauchement = 0 } = {}) {
+  const c = base.chantiers.find(x => x.id === cid);
+  const hj = hjDe(c);
+  const out = {};
+  const depart = ajouterJoursOuvres(debut || (c && c.dateDebut) || aujourdHui(), 1);
+  const chev = Math.max(0, Math.min(0.9, num(chevauchement)));
+  let prec = null;
+  phasesBTE(base, cid).forEach(p => {
+    const duree = dureePhase(p.budget, effectif, hj);
+    // Démarre après la phase précédente, ou pendant (chevauchement) mais au plus tôt son 2e jour
+    const d = prec ? ajouterJoursOuvres(prec.debut, Math.max(2, Math.round(prec.duree * (1 - chev)) + 1)) : depart;
+    const f = ajouterJoursOuvres(d, duree);
+    out[p.ouvrage + '||' + p.phase] = { debut: d, fin: f };
+    prec = { debut: d, duree };
+  });
+  return out;
+}
+
+// Première et dernière date avec des heures sur une phase (pointage journalier, sinon semaines du suivi)
+function activiteReelle(base, cid) {
+  const m = {};
+  const noter = (k, d1, d2) => { const a = m[k] = m[k] || { debut: d1, fin: d2 }; if (d1 < a.debut) a.debut = d1; if (d2 > a.fin) a.fin = d2; };
+  (base.pointages || []).forEach(p => {
+    if (p.chantierId !== cid || p.statut !== 'present') return;
+    (p.lignes || []).forEach(l => { if (num(l.h) > 0) noter((l.ouvrage || '') + '||' + (l.phase || ''), p.date, p.date); });
+  });
+  (base.suivi || []).forEach(s => {
+    if (s.chantierId !== cid || !num(s.heures)) return;
+    const k = s.ouvrage + '||' + s.phase;
+    if (!m[k]) noter(k, s.semaine, addDays(s.semaine, 4));
+  });
+  return m;
+}
+
+function calcPlanning(base, cid, auj = aujourdHui()) {
+  const c = base.chantiers.find(x => x.id === cid);
+  const plan = (c && c.planning) || {};
+  const suivi = calcSuivi(base, cid);
+  const reel = activiteReelle(base, cid);
+  const rows = suivi.rows.map(r => {
+    const k = r.ouvrage + '||' + r.phase;
+    const pl = plan[k] || {};
+    const row = { cle: k, ouvrage: r.ouvrage, phase: r.phase, budget: r.budget, heures: r.heures, pct: r.pct, debut: pl.debut || '', fin: pl.fin || '', reel: reel[k] || null };
+    row.duree = row.debut && row.fin ? joursOuvres(row.debut, row.fin) : 0;
+    row.attendu = !row.debut || !row.fin ? null : auj < row.debut ? 0 : auj >= row.fin ? 1 : joursOuvres(row.debut, auj) / Math.max(1, row.duree);
+    if (r.pct >= 1) row.statut = 'termine';
+    else if (!row.debut || !row.fin) row.statut = 'non_planifie';
+    else if (auj > row.fin || row.pct + 0.1 < row.attendu) row.statut = 'retard';
+    else if (auj < row.debut && !row.reel) row.statut = 'a_venir';
+    else row.statut = 'en_cours';
+    // Fin projetée au rythme constaté
+    row.finProjetee = row.fin;
+    if (row.statut !== 'termine' && row.debut) {
+      const depart = row.reel ? (row.reel.debut < row.debut ? row.reel.debut : row.debut) : row.debut;
+      if (row.pct > 0 && depart <= auj) {
+        const ecoule = Math.max(1, joursOuvres(depart, auj));
+        const proj = ajouterJoursOuvres(depart, Math.ceil(ecoule / row.pct));
+        row.finProjetee = proj > (row.fin || '') ? proj : row.fin;
+      } else if (row.debut < auj && row.duree) {
+        const proj = ajouterJoursOuvres(addDays(auj, 1), row.duree);
+        row.finProjetee = proj > row.fin ? proj : row.fin;
+      }
+    }
+    row.glissement = row.finProjetee && row.fin && row.finProjetee > row.fin ? joursOuvres(addDays(row.fin, 1), row.finProjetee) : 0;
+    return row;
+  });
+  const planifiees = rows.filter(r => r.debut && r.fin);
+  const debut = planifiees.map(r => r.debut).sort()[0] || (c && c.dateDebut) || '';
+  const finPlan = planifiees.map(r => r.fin).sort().pop() || '';
+  const finProjetee = rows.map(r => r.finProjetee).filter(Boolean).sort().pop() || finPlan;
+  const finContrat = (c && c.dateFin) || finPlan;
+  const retard = finProjetee && finContrat && finProjetee > finContrat ? joursOuvres(addDays(finContrat, 1), finProjetee) : 0;
+  return { rows, debut, finPlan, finProjetee, finContrat, retard, jalons: ((c && c.jalons) || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')) };
+}
+
+/* ================================ Actions ================================ */
+const actionOuverte = a => a.statut !== 'faite';
+const actionEnRetard = (a, auj = aujourdHui()) => actionOuverte(a) && !!a.echeance && a.echeance < auj;
+function actionsDe(base, cid) {
+  return (base.actions || []).filter(a => !cid || a.chantierId === cid)
+    .sort((a, b) => (actionOuverte(b) - actionOuverte(a)) || (a.echeance || '9999').localeCompare(b.echeance || '9999'));
+}

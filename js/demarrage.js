@@ -70,7 +70,13 @@ document.addEventListener('focusout', () => setTimeout(() => {
 Synchro.base = () => db;
 Synchro.enregistrerBase = () => enregistrerLocal();
 Synchro.onChange = n => { rafraichirApresSynchro(); toast(`${n} mise(s) à jour reçue(s) de l'équipe`); };
-Synchro.onStatut = () => { renderSyncPill(); if (ui.view === 'parametres' && !modalOuverte()) rafraichirApresSynchro(); };
+Synchro.onStatut = () => {
+  renderSyncPill();
+  if (ui.view === 'parametres' && !modalOuverte()) rafraichirApresSynchro();
+  if (Synchro.etat === 'ok') envoyerPhotos();   // fichiers photo des chantiers partagés
+};
+// Photos reçues d'un autre appareil : les vignettes se chargent au rendu suivant
+addEventListener('online', () => envoyerPhotos());
 document.addEventListener('DOMContentLoaded', () => { Synchro.init().then(() => renderShell()).catch(e => console.error(e)); });
 
 /* -------------------------------- Démarrage ------------------------------ */

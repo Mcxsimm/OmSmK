@@ -10,7 +10,7 @@ const UI_KEY = 'omsmk_ui';
 const REF = REFERENTIEL;
 
 /* ================================ État =================================== */
-function dbVide() { return { version: 1, chantiers: [], ops: [], suivi: [], taches: [], journal: [], reserves: [], checklists: {}, postes: [], situations: [], commandes: [], compagnons: [], pointages: [] }; }
+function dbVide() { return { version: 1, chantiers: [], ops: [], suivi: [], taches: [], journal: [], reserves: [], checklists: {}, postes: [], situations: [], commandes: [], compagnons: [], pointages: [], contacts: [], reunions: [], actions: [], securite: [], photos: [] }; }
 function chargerDB() {
   const d = lireJSON(STORE_KEY, null);
   return d && Array.isArray(d.chantiers) ? Object.assign(dbVide(), d) : dbVide();
@@ -18,7 +18,7 @@ function chargerDB() {
 let db = chargerDB();
 let user = lireJSON(USER_KEY, null);
 const ui = Object.assign({
-  view: 'tableau', chantierId: null, zone: null, terrainMode: 'liste', filtreTache: '',
+  view: 'journee', chantierId: null, zone: null, terrainMode: 'liste', filtreTache: '',
   qualiteTab: 'reserves', reserveFiltre: 'ouvertes', semaine: null, equipe: 2, paramTab: 'equipe', ptMode: 'jour'
 }, lireJSON(UI_KEY, {}));
 if (!ui.semaine) ui.semaine = lundi(aujourdHui());
@@ -61,15 +61,23 @@ const numeroReserve = (r) => {
 /* ============================ Navigation ================================= */
 const NAV = [
   { groupe: 'Pilotage', items: [
+    { v: 'journee', ic: 'house', t: 'Ma journée' },
     { v: 'tableau', ic: 'layout-dashboard', t: 'Tableau de bord' },
+    { v: 'planning', ic: 'chart-gantt', t: 'Planning' },
     { v: 'suivi', ic: 'trending-up', t: 'Suivi hebdomadaire' },
     { v: 'bte', ic: 'calculator', t: 'Budget (BTE)' }
   ]},
   { groupe: 'Terrain', items: [
     { v: 'pointage', ic: 'clock', t: 'Pointage journalier' },
     { v: 'terrain', ic: 'clipboard-check', t: 'Saisie terrain' },
-    { v: 'journal', ic: 'notebook-pen', t: 'Journal de chantier' },
-    { v: 'qualite', ic: 'shield-check', t: 'Qualité & réserves' }
+    { v: 'journal', ic: 'notebook-pen', t: 'Journal & photos' },
+    { v: 'qualite', ic: 'shield-check', t: 'Qualité & réserves' },
+    { v: 'securite', ic: 'shield-alert', t: 'Sécurité' }
+  ]},
+  { groupe: 'Coordination', items: [
+    { v: 'actions', ic: 'list-todo', t: 'Plan d\'actions' },
+    { v: 'reunions', ic: 'messages-square', t: 'Réunions & CR' },
+    { v: 'annuaire', ic: 'contact', t: 'Annuaire' }
   ]},
   { groupe: 'Gestion', items: [
     { v: 'finances', ic: 'wallet', t: 'Synthèse financière' },
@@ -82,17 +90,22 @@ const NAV = [
   ]}
 ];
 const TITRES = Object.fromEntries(NAV.flatMap(g => g.items.map(i => [i.v, i.t])));
-const VUES_SANS_CHANTIER = ['portefeuille', 'parametres'];
+const VUES_SANS_CHANTIER = ['journee', 'portefeuille', 'parametres'];
 
 function renderShell() {
   const c = ch();
   $('#chantierNom').textContent = c ? c.nom : 'Aucun chantier';
   const ouvertes = c ? deCh(db.reserves).filter(r => r.statut !== 'levée').length : 0;
+  const auj = aujourdHui();
+  const actRetard = c ? actionsDe(db, c.id).filter(a => actionEnRetard(a, auj)).length : 0;
+  const actRetardTous = actionsDe(db).filter(a => actionEnRetard(a, auj) && db.chantiers.some(x => x.id === a.chantierId)).length;
+  const surv = c ? permisAsurveiller(c.id).length : 0;
+  const compteur = v => ({ qualite: [ouvertes, 'alert'], actions: [actRetard, 'alert'], journee: [actRetardTous, 'alert'], securite: [surv, 'alert'], portefeuille: [db.chantiers.length, ''] })[v] || [0, ''];
   $('#sideNav').innerHTML = NAV.map(g => `<div class="nav-group"><div class="nav-group-title">${g.groupe}</div>${g.items.map(i =>
-    `<button class="nav-item ${ui.view === i.v ? 'active' : ''}" data-nav="${i.v}">${icone(i.ic)}<span>${i.t}</span>${i.v === 'qualite' && ouvertes ? `<span class="count alert">${ouvertes}</span>` : ''}${i.v === 'portefeuille' ? `<span class="count">${db.chantiers.length}</span>` : ''}</button>`).join('')}</div>`).join('');
+    `<button class="nav-item ${ui.view === i.v ? 'active' : ''}" data-nav="${i.v}">${icone(i.ic)}<span>${i.t}</span>${compteur(i.v)[0] ? `<span class="count ${compteur(i.v)[1]}">${compteur(i.v)[0]}</span>` : ''}</button>`).join('')}</div>`).join('');
   $('#sideFoot').innerHTML = `<button class="side-user" data-act="identite"><span class="avatar">${initiales(nomUser())}</span>
     <span class="grow"><span class="u-nom" style="display:block">${esc(nomUser() || 'Utilisateur')}</span><span class="u-role">${esc(user && user.role || 'Profil non renseigné')}</span></span>${icone('pencil', 'sm')}</button>`;
-  const mob = [['tableau', 'layout-dashboard', 'Bord'], ['pointage', 'clock', 'Pointage'], ['terrain', 'clipboard-check', 'Terrain'], ['suivi', 'trending-up', 'Suivi']];
+  const mob = [['journee', 'house', 'Journée'], ['pointage', 'clock', 'Pointage'], ['journal', 'camera', 'Journal'], ['actions', 'list-todo', 'Actions']];
   $('#bottomNav').innerHTML = mob.map(([v, ic, t]) => `<button class="${ui.view === v ? 'active' : ''}" data-nav="${v}">${icone(ic)}<span>${t}</span></button>`).join('')
     + `<button data-act="menuMobile">${icone('menu')}<span>Plus</span></button>`;
   $('#crumbs').innerHTML = (c && !VUES_SANS_CHANTIER.includes(ui.view) ? `<span>${esc(c.nom)}</span>${icone('chevron-right', 'sm')}` : '') + `<b>${esc(TITRES[ui.view] || '')}</b>`;
@@ -115,7 +128,8 @@ function renderSyncPill() {
   p.innerHTML = `<span class="dot"></span><span class="lbl">${lbl}</span>`;
 }
 
-const VUES = { tableau: vTableau, terrain: vTerrain, suivi: vSuivi, bte: vBTE, journal: vJournal, qualite: vQualite, portefeuille: vPortefeuille, parametres: vParametres, finances: c => vFinances(c), situations: c => vSituations(c), commandes: c => vCommandes(c), pointage: c => vPointage(c) };
+const VUES = { tableau: vTableau, terrain: vTerrain, suivi: vSuivi, bte: vBTE, journal: vJournal, qualite: vQualite, portefeuille: vPortefeuille, parametres: vParametres, finances: c => vFinances(c), situations: c => vSituations(c), commandes: c => vCommandes(c), pointage: c => vPointage(c),
+  journee: () => vJournee(), planning: c => vPlanning(c), securite: c => vSecurite(c), actions: c => vActions(c), reunions: c => vReunions(c), annuaire: c => vAnnuaire(c) };
 
 function render() {
   if (!ch() && db.chantiers.length) ui.chantierId = db.chantiers[0].id;
@@ -126,6 +140,7 @@ function render() {
   $('#view').innerHTML = (!VUES_SANS_CHANTIER.includes(ui.view) && !c) ? vAccueil() : VUES[ui.view](c);
   if (ui.view === 'terrain' && c && ui.terrainMode === 'liste') renderListeTaches();
   dessinerGraphiques();
+  hydraterPhotos($('#view'));
   saveUI();
 }
 
@@ -184,6 +199,12 @@ function alertes(c, s) {
     const manquants = veille >= c.dateDebut ? equipePt.filter(k => !(db.pointages || []).some(p => p.chantierId === c.id && p.date === veille && p.compagnonId === k.id)) : [];
     if (manquants.length) out.push({ sev: 'warning', ic: 'clock', t: `Pointage du ${fmtDate(veille)} incomplet`, d: `${manquants.length} compagnon(s) non pointé(s) : ${manquants.slice(0, 3).map(k => esc(`${k.prenom || ''} ${k.nom || ''}`.trim())).join(', ')}${manquants.length > 3 ? '…' : ''}.`, go: 'pointage', date: veille });
   }
+  const pl = calcPlanning(db, c.id, auj);
+  if (pl.retard) out.push({ sev: 'serious', ic: 'chart-gantt', t: `Délai : ${pl.retard} jour(s) de retard projeté`, d: `Fin projetée le ${fmtDate(pl.finProjetee)} pour une fin contractuelle le ${fmtDate(pl.finContrat)}.`, go: 'planning' });
+  const phRetard = pl.rows.filter(r => r.statut === 'retard');
+  if (phRetard.length && !pl.retard) out.push({ sev: 'warning', ic: 'chart-gantt', t: `${phRetard.length} phase(s) en retard sur le planning`, d: phRetard.slice(0, 3).map(r => `${esc(r.phase)} (${pc(r.pct)} pour ${pc(r.attendu)} attendu)`).join(' · '), go: 'planning' });
+  const actRetard = actionsDe(db, c.id).filter(a => actionEnRetard(a, auj) && (a.origine || {}).type !== 'securite');
+  if (actRetard.length) out.push({ sev: 'warning', ic: 'list-todo', t: `${actRetard.length} action(s) en retard`, d: actRetard.slice(0, 3).map(a => esc(a.libelle) + (a.responsable ? ` (${esc(a.responsable)})` : '')).join(' · '), go: 'actions' });
   const semCourante = lundi(auj);
   if (s.rows.length && c.dateDebut && c.dateDebut <= auj && (!c.dateFin || c.dateFin >= semCourante)
       && !deCh(db.suivi).some(x => x.semaine === semCourante && x.pct !== null && x.pct !== undefined)) out.push({ sev: 'warning', ic: 'notebook-pen', t: 'Suivi de la semaine à renseigner', d: `Semaine ${semISO(semCourante)} : % d'avancement des phases non saisi.`, go: 'suivi' });
@@ -210,7 +231,7 @@ function vTableau(c) {
   const indice = s.tot.heures > 0 ? s.tot.gagnees / s.tot.heures : null;
   const theo = avancementTheorique(c);
   const st = statutChantier(c);
-  const al = alertes(c, s);
+  const al = alertes(c, s).concat(etatSecurite(c).alertes).sort((a, b) => ({ critical: 0, serious: 1, warning: 2 }[a.sev] ?? 9) - ({ critical: 0, serious: 1, warning: 2 }[b.sev] ?? 9));
   const act = activiteRecente(c);
   const pts = serieAvancement(db, c.id);
   const cdt = nbChecklist(c.id, 'cdt');
@@ -504,8 +525,19 @@ function vJournal(c) {
   const nI = js.filter(j => j.intemperie).length;
   const hT = js.reduce((t, j) => t + num(j.heures), 0);
   const eff = js.filter(j => num(j.effectif));
-  const entete = enTetePage({ eyebrow: 'Journal de chantier', titre: 'Main courante', sous: [sousInfo('notebook-pen', `${js.length} entrée(s)`)], actions: `<button class="btn primary" data-act="journalNew">${icone('plus')}Nouvelle entrée</button>` });
-  return entete + `<div class="stack">
+  const phs = photosDe(c.id);
+  const onglet = ui.journalTab === 'photos' ? 'photos' : 'journal';
+  const entete = enTetePage({ eyebrow: 'Journal de chantier', titre: onglet === 'photos' ? 'Photos du chantier' : 'Main courante', sous: [sousInfo('notebook-pen', `${js.length} entrée(s)`), sousInfo('camera', `${phs.length} photo(s)`)],
+    actions: `<label class="btn">${icone('camera')}Photos<input type="file" accept="image/*" multiple hidden data-change="photosGalerie"></label><button class="btn primary" data-act="journalNew">${icone('plus')}Nouvelle entrée</button>` });
+  const seg = `<div class="seg" style="margin-bottom:16px"><button class="${onglet === 'journal' ? 'on' : ''}" data-act="journalTab" data-t="journal">${icone('notebook-pen', 'sm')}Main courante <span class="n">${js.length}</span></button><button class="${onglet === 'photos' ? 'on' : ''}" data-act="journalTab" data-t="photos">${icone('image', 'sm')}Photos <span class="n">${phs.length}</span></button></div>`;
+  if (onglet === 'photos') {
+    const jours = [...new Set(phs.map(p => p.date))];
+    return entete + seg + (phs.length ? `<div class="stack">${jours.map(d => `<div class="card"><div class="card-head"><h3>${fmtDate(d, true)}</h3><span class="hint">${phs.filter(p => p.date === d).length} photo(s)</span></div>
+      <div class="card-body">${vignettesPhotos(phs.filter(p => p.date === d), { legende: true })}</div></div>`).join('')}</div>`
+      : `<div class="card">${vide('camera', 'Aucune photo', 'Prenez des photos depuis le téléphone : avancement, points singuliers, réserves, livraisons. Elles restent disponibles hors-ligne et sont partagées avec l\'équipe.',
+        `<label class="btn primary">${icone('camera')}Prendre des photos<input type="file" accept="image/*" multiple hidden data-change="photosGalerie"></label>`)}</div>`);
+  }
+  return entete + seg + `<div class="stack">
     <div class="card mini-stats">
       <div><div class="ms-lbl">${icone('notebook-pen', 'sm')}Entrées</div><div class="ms-val">${js.length}</div></div>
       <div><div class="ms-lbl">${icone('cloud-rain', 'sm')}Intempéries</div><div class="ms-val ${nI ? 'neg' : ''}">${nI}</div></div>
@@ -519,6 +551,7 @@ function vJournal(c) {
         <div><button class="btn ghost icon sm" data-act="journalEdit" data-id="${esc(j.id)}" aria-label="Modifier">${icone('pencil', 'sm')}</button><button class="btn ghost icon sm" data-act="journalSuppr" data-id="${esc(j.id)}" aria-label="Supprimer">${icone('trash-2', 'sm')}</button></div></div>
       ${j.intemperie && j.cause ? `<div class="small" style="margin-top:8px"><b>Cause :</b> ${esc(j.cause)}${(j.verifs || []).length ? ` <span class="muted">· ${j.verifs.length} bonne(s) pratique(s) vérifiée(s)</span>` : ''}</div>` : ''}
       ${j.texte ? `<div class="tl-body">${esc(j.texte)}</div>` : ''}
+      ${vignettesPhotos(photosDe(c.id, 'journal', j.id), { petit: true })}
       ${j.auteur ? `<div class="xs muted" style="margin-top:8px">${esc(j.auteur)}</div>` : ''}</div></div>`).join('')}</div>`
       : `<div class="card">${vide('notebook-pen', 'Aucune entrée', 'Consignez chaque jour l\'effectif, la météo, les travaux réalisés, les visites et les événements.', `<button class="btn primary" data-act="journalNew">${icone('plus')}Nouvelle entrée</button>`)}</div>`}
   </div>`;
@@ -549,6 +582,7 @@ function vQualite(c) {
         return `<div class="res-item"><span class="res-num">${numeroReserve(r)}</span>
           <div><div class="r-desc">${esc(r.description)}</div>
             <div class="r-meta"><span>${icone('map-pin', 'sm')}${esc(r.zone || 'Sans zone')}</span><span>${icone('info', 'sm')}${esc(r.origine || '')}</span>${r.responsable ? `<span>${icone('user', 'sm')}${esc(r.responsable)}</span>` : ''}<span>${icone('calendar', 'sm')}créée ${fmtDate(r.creeLe)}</span></div>
+            ${vignettesPhotos(photosDe(c.id, 'reserve', r.id), { petit: true })}
             <div style="margin-top:8px">${r.statut === 'levée' ? `<span class="badge pos">${icone('check')}Levée le ${fmtDate(r.leveeLe)}</span>` : `<span class="badge ${retard ? 'neg' : 'warn'} dot">${retard ? 'En retard' : 'Ouverte'}${r.echeance ? ' · échéance ' + fmtDate(r.echeance) : ''}</span>`}</div></div>
           <div class="row" style="flex-wrap:nowrap"><button class="btn sm ${r.statut === 'levée' ? '' : 'primary'}" data-act="resLever" data-id="${esc(r.id)}">${r.statut === 'levée' ? icone('undo-2', 'sm') + 'Rouvrir' : icone('check', 'sm') + 'Lever'}</button>
             <button class="btn ghost icon sm" data-act="resEdit" data-id="${esc(r.id)}" aria-label="Modifier">${icone('pencil', 'sm')}</button><button class="btn ghost icon sm" data-act="resSuppr" data-id="${esc(r.id)}" aria-label="Supprimer">${icone('trash-2', 'sm')}</button></div></div>`;
@@ -764,8 +798,10 @@ function modalJournal(j) {
       <div class="alert warn" style="margin-bottom:14px">${icone('triangle-alert')}<div><b>Avant de se déclarer en intempéries, vérifier :</b>
         ${REF.intemperies.map((it, i) => `<label class="checkbox" style="margin-top:8px"><input type="checkbox" class="jVerif" value="${i}" ${(e.verifs || []).includes(i) ? 'checked' : ''}><span class="small">${esc(it)}</span></label>`).join('')}</div></div>
     </div>
-    ${zoneTexte('jTexte', 'Travaux réalisés, visites, événements', e.texte, 'rows="5"')}`,
+    ${zoneTexte('jTexte', 'Travaux réalisés, visites, événements', e.texte, 'rows="5"')}
+    ${blocPhotosModal('journal', j ? j.id : '')}`,
     `<button class="btn" data-act="fermerModal">Annuler</button><button class="btn primary" data-act="saveJournal">Enregistrer</button>`, { icone: 'notebook-pen' });
+  hydraterPhotos($('#modalRoot'));
 }
 
 function modalReserve(r) {
@@ -776,8 +812,10 @@ function modalReserve(r) {
     ${champ('rZone', 'Zone / localisation', e.zone, 'text', 'list="dlZones"')}
     ${zoneTexte('rDesc', 'Description *', e.description, 'rows="3"')}
     <div class="form-grid">${selectHTML('rOrigine', 'Origine', ['OPR', 'Autocontrôle', 'Visite CDT', 'Client / MOE', 'Bureau de contrôle', 'GPA'], e.origine)}${champ('rResp', 'Responsable', e.responsable)}</div>
-    ${champ('rEch', 'Échéance de levée', e.echeance, 'date')}`,
+    ${champ('rEch', 'Échéance de levée', e.echeance, 'date')}
+    ${blocPhotosModal('reserve', r ? r.id : '')}`,
     `<button class="btn" data-act="fermerModal">Annuler</button><button class="btn primary" data-act="saveReserve">Enregistrer</button>`, { icone: 'circle-alert' });
+  hydraterPhotos($('#modalRoot'));
 }
 
 function modalGenTaches() {
@@ -1051,6 +1089,7 @@ const ACT = {
   journalEdit: el => modalJournal(db.journal.find(j => j.id === el.dataset.id)),
   journalSuppr: async el => {
     if (!await confirmer('Supprimer l\'entrée', 'Cette entrée du journal sera supprimée.', { ok: 'Supprimer', danger: true })) return;
+    supprimerPhotosDe('journal', el.dataset.id);
     db.journal = db.journal.filter(j => j.id !== el.dataset.id); save(); render();
   },
   saveJournal: () => {
@@ -1059,19 +1098,23 @@ const ACT = {
       date: val('jDate') || aujourdHui(), meteo: val('jMeteo'), effectif: num(val('jEff')), heures: num(val('jH')),
       intemperie: $('#jIntemp').checked, cause: val('jCause'), verifs: $$('.jVerif').filter(x => x.checked).map(x => Number(x.value)), texte: val('jTexte')
     };
+    let cible = id;
     if (id) Object.assign(db.journal.find(j => j.id === id), data);
-    else db.journal.push(Object.assign({ id: uid(), chantierId: ui.chantierId, auteur: nomUser() }, data));
+    else { cible = uid(); db.journal.push(Object.assign({ id: cible, chantierId: ui.chantierId, auteur: nomUser() }, data)); }
     save(); fermerModal(); render(); toast('Journal enregistré', 'succes');
+    validerPhotosAttente('journal', cible);
   },
 
   // Qualité
   qTab: el => { ui.qualiteTab = el.dataset.t; render(); },
+  journalTab: el => { ui.journalTab = el.dataset.t; render(); },
   resFiltre: el => { ui.reserveFiltre = el.dataset.f; render(); },
   resNew: () => modalReserve(null),
   resEdit: el => modalReserve(db.reserves.find(r => r.id === el.dataset.id)),
   resSuppr: async el => {
     const r = db.reserves.find(x => x.id === el.dataset.id);
     if (!r || !await confirmer(`Supprimer la réserve ${numeroReserve(r)}`, esc(r.description), { ok: 'Supprimer', danger: true })) return;
+    supprimerPhotosDe('reserve', r.id);
     db.reserves = db.reserves.filter(x => x !== r); save(); render();
   },
   resLever: el => {
@@ -1085,9 +1128,11 @@ const ACT = {
     if (!description) return toast('Décrivez la réserve.', 'alerte');
     const id = val('rId');
     const data = { zone: val('rZone'), description, origine: val('rOrigine'), responsable: val('rResp'), echeance: val('rEch') };
+    let cible = id;
     if (id) Object.assign(db.reserves.find(r => r.id === id), data);
-    else db.reserves.push(Object.assign({ id: uid(), chantierId: ui.chantierId, statut: 'ouverte', creeLe: aujourdHui(), creePar: nomUser(), leveeLe: '' }, data));
+    else { cible = uid(); db.reserves.push(Object.assign({ id: cible, chantierId: ui.chantierId, statut: 'ouverte', creeLe: aujourdHui(), creePar: nomUser(), leveeLe: '' }, data)); }
     save(); fermerModal(); render(); toast('Réserve enregistrée', 'succes');
+    validerPhotosAttente('reserve', cible);
   },
 
   // Synchronisation
@@ -1168,6 +1213,7 @@ const ACT = {
     db.journal.push(...d.journal); db.reserves.push(...d.reserves); Object.assign(db.checklists, d.checklists);
     db.postes.push(...d.postes); db.situations.push(...d.situations); db.commandes.push(...d.commandes);
     db.compagnons.push(...d.compagnons); db.pointages.push(...d.pointages);
+    ['contacts', 'reunions', 'actions', 'securite'].forEach(k => db[k].push(...(d[k] || [])));
     ui.chantierId = d.chantier.id; ui.zone = null; ui.semaine = lundi(aujourdHui());
     save(); allerA('tableau'); toast('Démonstration chargée', 'succes');
   },
@@ -1233,7 +1279,7 @@ function insererOp(op) {
 
 function supprimerChantier(cid) {
   db.chantiers = db.chantiers.filter(c => c.id !== cid);
-  ['ops', 'suivi', 'taches', 'journal', 'reserves', 'postes', 'situations', 'commandes', 'compagnons', 'pointages'].forEach(k => { db[k] = (db[k] || []).filter(x => x.chantierId !== cid); });
+  ['ops', 'suivi', 'taches', 'journal', 'reserves', 'postes', 'situations', 'commandes', 'compagnons', 'pointages', 'contacts', 'reunions', 'actions', 'securite', 'photos'].forEach(k => { db[k] = (db[k] || []).filter(x => x.chantierId !== cid); });
   delete db.checklists[cid];
   if (ui.chantierId === cid) ui.chantierId = db.chantiers[0] ? db.chantiers[0].id : null;
 }

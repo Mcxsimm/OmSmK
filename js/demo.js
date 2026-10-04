@@ -134,5 +134,68 @@ function construireDemo(lundiCourant) {
       lignes: [{ designation: 'Grue mobile avec opérateur', quantite: 1, unite: 'jour', pu: 480 }] }
   ];
 
-  return { chantier, ops, suivi, taches, journal, reserves, checklists, postes, situations, commandes, compagnons, pointages };
+  // Planning (jours ouvrés) et jalons
+  const T = 'Toiture A||';
+  chantier.planning = {
+    [T + 'Installation / Appro']: { debut: s1, fin: s1 },
+    [T + 'Pare-vapeur']: { debut: s1, fin: addDays(s1, 2) },
+    [T + "Hors d'eau"]: { debut: addDays(s1, 1), fin: addDays(s2, 1) },
+    [T + '2nd couche et relevés']: { debut: addDays(s2, 2), fin: addDays(s2, 7) },
+    [T + 'Finitions']: { debut: addDays(s2, 8), fin: addDays(s2, 11) }
+  };
+  chantier.jalons = [
+    { id: id(), libelle: 'Démarrage des travaux', date: s1, fait: true },
+    { id: id(), libelle: 'Mise hors d\'eau', date: addDays(s2, 1), fait: true },
+    { id: id(), libelle: 'OPR', date: addDays(s1, 30), fait: false },
+    { id: id(), libelle: 'Réception', date: addDays(s1, 34), fait: false }
+  ];
+
+  // Annuaire du chantier (coordonnées fictives)
+  const ct = (role, societe, nom, fonction, n) => ({ id: id(), chantierId: cid, role, societe, nom, fonction, tel: `02 35 00 00 ${String(n).padStart(2, '0')}`, email: `${nom.split(' ').pop().toLowerCase()}@exemple.fr`, notes: '' });
+  const contacts = [
+    ct('Maître d\'ouvrage', 'CIGV', 'Claire Durand', 'Chargée d\'opération', 11),
+    ct('Maître d\'œuvre', 'Atelier d\'architecture Seine', 'Paul Lefèvre', 'Architecte', 12),
+    ct('Bureau de contrôle', 'Contrôle Technique Ouest', 'Inès Martin', 'Contrôleur technique', 13),
+    ct('CSPS', 'Coordination SPS Normandie', 'Julien Roux', 'Coordonnateur SPS', 14),
+    ct('Entreprise générale', 'Bâtir Normandie', 'Sophie Leroy', 'Conductrice de travaux GO', 15),
+    ct('Fournisseur', 'Négoce Étanchéité Ouest', 'Thomas Girard', 'Commercial', 16)
+  ];
+  const part = (k, statut) => ({ contactId: k.id, nom: k.nom, societe: k.societe, role: k.role, email: k.email, statut });
+
+  // Réunion de chantier n° 1 et plan d'actions
+  const reu1 = id();
+  const reunions = [{
+    id: reu1, chantierId: cid, numero: 1, type: 'Réunion de chantier', date: addDays(s1, 3), heure: '09:00', lieu: 'Base vie — bâtiment A', redacteur: 'Marc',
+    participants: [{ nom: 'Marc', societe: 'SMAC', role: 'Conducteur de travaux', statut: 'present' }, part(contacts[0], 'present'), part(contacts[1], 'present'), part(contacts[4], 'present'), part(contacts[3], 'excuse'), part(contacts[2], 'diffusion')],
+    points: [
+      { id: id(), titre: 'Effectifs et avancement', texte: 'Équipe SMAC : 1 chef d\'équipe + 1 compagnon. Installation terminée, pare-vapeur à 75 %, isolant démarré sur terrasses 1 et 2.' },
+      { id: id(), titre: 'Planning', texte: 'Arrêt intempéries mercredi (pluie continue). Mise hors d\'eau maintenue en fin de semaine prochaine.' },
+      { id: id(), titre: 'Sécurité', texte: 'Garde-corps périphériques en place. Rappel : permis de feu quotidien et surveillance 2 h après l\'arrêt du chalumeau.' },
+      { id: id(), titre: 'Interfaces avec les autres corps d\'état', texte: 'Acrotère nord : reprise béton à prévoir par le GO avant les relevés. Zone de stockage terrasse 3 à libérer.' }
+    ],
+    prochaine: { date: addDays(s2, 3), heure: '09:00' }, observations: '', diffuseLe: addDays(s1, 3)
+  }];
+  const act = (libelle, responsable, echeance, statut, origine, faiteLe) => ({ id: id(), chantierId: cid, libelle, responsable, echeance, statut, origine, creeLe: addDays(s1, 3), creePar: 'Marc', faiteLe: faiteLe || '' });
+  const o1 = { type: 'reunion', id: reu1 };
+  const visite = id();
+  const actions = [
+    act('Transmettre les détails d\'acrotère révisés', 'Atelier d\'architecture Seine (Paul Lefèvre)', addDays(s2, 1), 'ouverte', o1),
+    act('Reprendre le béton de l\'acrotère nord avant relevés', 'Bâtir Normandie (Sophie Leroy)', addDays(s2, 4), 'ouverte', o1),
+    act('Libérer la zone de stockage terrasse 3', 'Bâtir Normandie (Sophie Leroy)', addDays(s1, 7), 'faite', o1, addDays(s2, 0)),
+    act('Valider l\'échantillon de couvertine (RAL 7016)', 'CIGV (Claire Durand)', addDays(s2, 9), 'ouverte', o1),
+    act('Sécurité — Extincteur à moins de 10 m du poste de chalumeau', 'Karim Benali', addDays(s1, 5), 'faite', { type: 'securite', id: visite }, addDays(s1, 4)),
+    act('Commander les crapaudines du TS 01', 'Marc', addDays(s2, 2), 'ouverte', { type: 'manuel' })
+  ];
+
+  // Registre sécurité
+  const items = n => Object.fromEntries(Array.from({ length: n }, (_, i) => [i, true]));
+  const securite = [
+    { id: id(), chantierId: cid, type: 'accueil', date: s1, compagnonId: K, animateur: 'Marc', items: items(10), par: 'Démo' },
+    { id: id(), chantierId: cid, type: 'accueil', date: s1, compagnonId: L, animateur: 'Marc', items: items(10), par: 'Démo' },
+    { id: id(), chantierId: cid, type: 'causerie', date: s1, theme: 'Travaux par point chaud : chalumeau, permis de feu, extincteur', animateur: 'Marc', participants: [K, L], externes: '', notes: 'Rappel des distances de sécurité, contrôle des flexibles, surveillance après travaux.', par: 'Démo' },
+    { id: visite, chantierId: cid, type: 'visite', date: addDays(s1, 3), auteur: 'Marc', items: Object.assign(Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i, 'c'])), { 4: 'nc' }), notes: 'Extincteur resté au pied du monte-matériaux.', par: 'Démo' },
+    { id: id(), chantierId: cid, type: 'permis', date: s2, zone: 'Terrasses 01 et 02 — relevés', debut: '08:00', fin: '15:30', travaux: 'Soudure de membranes bitumineuses au chalumeau', intervenants: [K, L], mesures: items(6), surveillance: { fait: true, heure: '17:35', par: 'Karim Benali' }, par: 'Démo' }
+  ];
+
+  return { chantier, ops, suivi, taches, journal, reserves, checklists, postes, situations, commandes, compagnons, pointages, contacts, reunions, actions, securite };
 }

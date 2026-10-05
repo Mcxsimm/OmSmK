@@ -717,3 +717,81 @@ function releveHeuresPDF(lun) {
   doc.save(`Releve_heures_S${String(semISO(lun)).padStart(2, '0')}_${lun.slice(0, 4)}_${c.nom.replace(/[^\w-]+/g, '_')}.pdf`);
   toast(`Relevé de la semaine ${semISO(lun)} généré`, 'succes');
 }
+
+/* ============================== Google Drive ============================= */
+function vDrive() {
+  const id = Drive.clientId();
+  const origine = location.origin + location.pathname.replace(/[^/]*$/, '');
+  if (!Drive.connecte()) {
+    return `<div class="card"><div class="card-body">
+      <div class="row" style="gap:14px;align-items:flex-start"><span class="kpi-ico" style="width:44px;height:44px">${icone('cloud', 'lg')}</span>
+        <div class="grow"><h3>Enregistrer mes données sur Google Drive</h3>
+          <p class="muted" style="margin-top:4px">Vos chantiers sont enregistrés dans le dossier <b>OmSmK</b> de votre Google Drive, avec une copie par jour conservée 30 jours.
+            Le PC et le téléphone connectés au même compte Google retrouvent les mêmes données. Hors-ligne, l'application continue de fonctionner et envoie les saisies au retour du réseau.
+            OmSmK n'a accès qu'aux fichiers qu'il a lui-même créés dans votre Drive.</p>
+          ${id ? `<button class="btn primary" style="margin-top:14px" data-act="driveConnecter">${icone('cloud')}Connecter Google Drive</button>` : ''}</div></div></div>
+      <div class="sep"></div>
+      <div class="card-body"><div class="form-section" style="margin-top:0">${id ? 'Identifiant client Google' : 'Une étape à faire une seule fois : créer l\'identifiant client Google'}</div>
+        ${id ? '' : `<ol class="small" style="margin:6px 0 12px 18px;line-height:1.7">
+          <li>Ouvrez <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">console.cloud.google.com</a> avec votre compte Google et créez un projet (ex. « OmSmK »).</li>
+          <li>Menu <b>API et services → Bibliothèque</b> : activez <b>Google Drive API</b>.</li>
+          <li><b>Écran de consentement OAuth</b> : type <i>Externe</i>, nom « OmSmK », votre e-mail ; dans <b>Utilisateurs test</b>, ajoutez votre adresse Gmail.</li>
+          <li><b>Identifiants → Créer des identifiants → ID client OAuth</b> : type <i>Application Web</i>, origine JavaScript autorisée : <code>${esc(location.origin)}</code></li>
+          <li>Copiez l'<b>ID client</b> (se termine par <code>.apps.googleusercontent.com</code>) et collez-le ci-dessous.</li></ol>`}
+        <div class="row" style="flex-wrap:nowrap"><input class="input" id="drvClient" value="${esc(id)}" placeholder="xxxxxxxx.apps.googleusercontent.com" aria-label="Identifiant client Google">
+          <button class="btn ${id ? '' : 'primary'}" data-act="driveClientId">${icone('check')}Enregistrer</button></div>
+        <p class="small muted" style="margin-top:8px">Adresse de l'application à autoriser : <code>${esc(origine)}</code></p></div></div>`;
+  }
+  const etat = { ok: ['pos', 'Enregistré'], encours: ['info', 'Synchronisation…'], erreur: ['neg', 'Erreur'], reconnexion: ['warn', 'Reconnexion nécessaire'], off: ['', 'Déconnecté'] }[Drive.etat] || ['', Drive.etat];
+  const dossier = Drive._cfg.dossierId;
+  setTimeout(afficherStockage, 0);
+  return `<div class="card">
+      <div class="set-row"><div class="row"><span class="kpi-ico" style="width:44px;height:44px">${icone('cloud', 'lg')}</span><div class="s-txt"><b>${esc(Drive.email() || 'Google Drive')}</b>
+        <span><span class="badge ${etat[0]} dot">${etat[1]}</span> ${Drive.derniere || Drive._cfg.derniere ? `· dernière synchronisation ${new Date(Drive.derniere || Drive._cfg.derniere).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}</span></div></div>
+        ${Drive.etat === 'reconnexion' ? `<button class="btn primary" data-act="driveConnecter">${icone('refresh-cw')}Se reconnecter</button>` : `<button class="btn" data-act="driveSync">${icone('refresh-cw')}Synchroniser</button>`}</div>
+      ${Drive.etat === 'erreur' ? `<div class="card-body"><div class="alert neg">${icone('triangle-alert')}<div>${esc(Drive.erreur)}</div></div></div>` : ''}
+      <div class="set-row"><div class="s-txt"><b>Dossier OmSmK</b><span>Fichier <code>${DRIVE_FICHIER}</code> et sous-dossier <i>Sauvegardes</i> (une copie par jour, 30 jours).</span></div>${dossier ? `<a class="btn" href="https://drive.google.com/drive/folders/${esc(dossier)}" target="_blank" rel="noopener">${icone('external-link')}Ouvrir</a>` : ''}</div>
+      <div class="set-row"><div class="s-txt"><b>Revenir à une copie datée</b><span>Remplace les données par celles d'un jour précédent ; la version actuelle reste dans les copies.</span></div><button class="btn" data-act="driveCopies">${icone('undo-2')}Choisir une copie</button></div>
+      <div class="set-row"><div class="s-txt"><b>Déconnecter</b><span>Les données restent sur l'appareil et sur votre Drive.</span></div><button class="btn ghost" data-act="driveDeconnecter">${icone('log-out')}Déconnecter</button></div>
+      <div class="set-row"><div class="s-txt"><b>Stockage sur l'appareil</b><span id="drvStock">…</span></div></div></div>`;
+}
+async function afficherStockage() {
+  const z = $('#drvStock');
+  if (!z || !navigator.storage || !navigator.storage.estimate) return;
+  const e = await navigator.storage.estimate();
+  z.textContent = `${fmt((e.usage || 0) / 1048576, 1)} Mo utilisés sur ${fmt((e.quota || 0) / 1073741824, 1)} Go disponibles (données et photos)`;
+}
+
+Object.assign(ACT, {
+  driveClientId: () => {
+    const v = val('drvClient');
+    if (v && !/\.apps\.googleusercontent\.com$/.test(v)) return toast('L\'identifiant client doit se terminer par .apps.googleusercontent.com', 'alerte');
+    Drive.definirClientId(v); render(); toast(v ? 'Identifiant enregistré : vous pouvez connecter Google Drive' : 'Identifiant effacé', 'succes');
+  },
+  driveConnecter: async () => {
+    try { await Drive.connecter(); render(); toast(`Google Drive connecté${Drive.email() ? ' : ' + Drive.email() : ''}`, 'succes'); }
+    catch (e) { console.error(e); toast('Connexion à Google Drive impossible : ' + (e.message || e), 'erreur'); render(); }
+  },
+  driveSync: async () => { await Drive.synchroniser(); render(); if (Drive.etat === 'ok') toast('Données enregistrées sur Google Drive', 'succes'); },
+  driveDeconnecter: async () => {
+    if (!await confirmer('Déconnecter Google Drive', 'Les saisies ne seront plus enregistrées sur votre Drive. Les données restent sur cet appareil et sur le Drive.', { ok: 'Déconnecter' })) return;
+    Drive.deconnecter(); render();
+  },
+  driveCopies: async () => {
+    try {
+      const copies = await Drive.listerCopies();
+      if (!copies.length) return toast('Aucune copie datée pour l\'instant.', 'alerte');
+      ouvrirModal('Revenir à une copie datée', `<div class="stack">${copies.map(c => `<button class="menu-lien" data-act="driveRestaurer" data-id="${esc(c.id)}" data-n="${esc(c.name)}">${icone('calendar', 'sm')}${esc(fmtDate(c.name.replace(/^omsmk_|\.json$/g, ''), true))}</button>`).join('')}</div>`,
+        '<button class="btn" data-act="fermerModal">Fermer</button>', { icone: 'undo-2', taille: 'narrow' });
+    } catch (e) { toast(e.message || String(e), 'erreur'); }
+  },
+  driveRestaurer: async el => {
+    if (!await confirmer('Revenir à cette copie', `Les données de tous vos chantiers seront remplacées par la copie du <b>${esc(fmtDate(el.dataset.n.replace(/^omsmk_|\.json$/g, ''), true))}</b>, puis enregistrées sur le Drive.`, { ok: 'Remplacer', danger: true })) return;
+    try {
+      const d = await Drive.lireCopie(el.dataset.id);
+      if (!d || !Array.isArray(d.chantiers)) throw new Error('Copie illisible');
+      db = Object.assign(dbVide(), d); ui.chantierId = null;
+      save(); fermerModal(); render(); toast('Copie restaurée', 'succes');
+    } catch (e) { toast('Restauration impossible : ' + (e.message || e), 'erreur'); }
+  }
+});

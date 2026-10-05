@@ -6,6 +6,8 @@ Excellence Opérationnelle SMAC : BTE standard, cadences cibles, suivi hebdomada
 Elle fonctionne **hors-ligne** sur smartphone, tablette ou PC, sans serveur ni compte.
 
 ## Interface
+**Mes pages** : au premier lancement, l'application propose de ne garder que les pages utiles (sélection conseillée pré-cochée : sans plan de charge, préparation, bilan, saisie terrain par zones, sécurité ni documents). Les pages masquées disparaissent des menus, de la recherche, des tuiles, des alertes et du bouton +, sans rien supprimer ; à changer dans Paramètres → Mes pages. Les pages chargées montrent l'essentiel, le détail se déplie à la demande.
+
 Pas de longue liste de menus : cinq **espaces** dans la barre du haut (Accueil, Chantier, Terrain, Coordination, Gestion).
 Chaque espace s'ouvre sur une page de **tuiles interactives** (chiffre clé, état, action rapide) et propose ses pages en onglets.
 Bouton **+** de création rapide (pointage, photo, action, réserve, quart d'heure sécurité, compte rendu…), **recherche** de tout

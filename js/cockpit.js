@@ -14,8 +14,7 @@ function alertesGlobales() {
   const out = [];
   db.chantiers.forEach(c => {
     const s = calcSuivi(db, c.id);
-    alertes(c, s).forEach(a => out.push(Object.assign({ c }, a)));
-    etatSecurite(c).alertes.forEach(a => out.push(Object.assign({ c }, a)));
+    alertesChantier(c, s).forEach(a => out.push(Object.assign({ c }, a)));
   });
   return out.sort((a, b) => (ORDRE_SEV[a.sev] ?? 9) - (ORDRE_SEV[b.sev] ?? 9));
 }
@@ -52,7 +51,7 @@ function vJournee() {
   const salut = h < 12 ? 'Bonjour' : h < 18 ? 'Bon après-midi' : 'Bonsoir';
   const entete = enTetePage({ eyebrow: fmtDate(auj, true), titre: `${salut}${user && user.prenom ? ' ' + user.prenom : ''}`,
     sous: [sousInfo('briefcase', `${actifs.length} chantier(s) actif(s)`), retard.length ? `<span class="badge neg">${retard.length} action(s) en retard</span>` : '<span class="badge pos">Aucune action en retard</span>'],
-    actions: `<button class="btn" data-nav="portefeuille">${icone('briefcase')}Portefeuille</button><button class="btn primary" data-act="cpNouvelleAction">${icone('plus')}Nouvelle action</button>` });
+    actions: `<button class="btn primary" data-act="cpSaisieOuvrir">${icone('plus')}Nouvelle action</button>` });
 
   const kpis = `<div class="resume">
     <div><span>Actions en retard</span><b class="${retard.length ? 'neg' : ''}">${retard.length}</b><small>${ouvertes.length} action(s) ouverte(s) au total</small></div>
@@ -61,8 +60,8 @@ function vJournee() {
   </div>`;
 
   const aFaire = retard.concat(ouvertes.filter(a => !actionEnRetard(a, auj) && (!a.echeance || a.echeance <= addDays(auj, 7)))).slice(0, 14);
-  const carteActions = `<div class="card"><div class="card-head"><h3>${icone('list-todo')}À faire</h3><span class="hint">en retard et sous 7 jours · tous chantiers</span></div>
-    <div class="card-body act-rapide">${datalistResponsables(ui.chantierId || (db.chantiers[0] || {}).id)}
+  const carteActions = `<div class="card"><div class="card-head"><h3>${icone('list-todo')}À faire</h3><span class="hint">en retard et sous 7 jours</span></div>
+    <div class="card-body act-rapide ${ui.cpSaisie ? '' : 'hidden'}" id="cpSaisie">${datalistResponsables(ui.chantierId || (db.chantiers[0] || {}).id)}
       <select class="input" id="cpCh" style="max-width:190px" aria-label="Chantier">${db.chantiers.map(c => `<option value="${esc(c.id)}" ${c.id === ui.chantierId ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}</select>
       <input class="input grow" id="cpLib" placeholder="Nouvelle action…" aria-label="Libellé de l'action">
       <input class="input" id="cpEch" type="date" value="${addDays(auj, 2)}" style="max-width:150px" aria-label="Échéance">
@@ -107,6 +106,7 @@ function vJournee() {
 }
 
 Object.assign(ACT, {
+  cpSaisieOuvrir: () => { const z = $('#cpSaisie'); if (!z) return modalAction(null); z.classList.toggle('hidden'); ui.cpSaisie = !z.classList.contains('hidden'); if (ui.cpSaisie) { $('#cpLib').focus(); z.scrollIntoView({ block: 'center' }); } },
   cpAller: el => {
     ui.chantierId = el.dataset.id; ui.zone = null;
     if (el.dataset.v === 'pointage' && el.dataset.d) { ui.ptDate = el.dataset.d; ui.ptMode = 'jour'; }

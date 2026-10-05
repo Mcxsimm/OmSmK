@@ -613,3 +613,213 @@ function bilanChantier(base, cid, auj = aujourdHui()) {
     phases
   };
 }
+
+/* ===================== OTP et RAF projet (modèle SAP) =====================
+   Le code OTP identifie le chantier dans SAP : pointage, commandes client et
+   fournisseurs, facturation et coûts réels y sont imputés.
+   RAF (reste à faire) par poste ; fin d'affaire = réel cumulé + RAF.
+   CA mérité (avancement par les coûts) = CA fin d'affaire × réel cumulé ÷ coûts fin d'affaire ;
+   FAE = CA mérité − facturé cumulé s'il est positif, PCA dans le cas contraire. */
+const POSTES_RAF = [
+  ['stmoyen', 'ST moyen'], ['stcomp', 'ST compétence'], ['mo', 'Main d\'œuvre'], ['fournitures', 'Fournitures'],
+  ['materiel', 'Matériel'], ['etudes', 'Études techniques'], ['autres', 'Autres dépenses']
+];
+const POSTE_RAF_ACHAT = { 'Matériaux': 'fournitures', 'Sous-traitance': 'stcomp', 'Matériel': 'materiel', 'Divers': 'autres' };
+// Nature comptable (plan comptable général) → poste du RAF ; la règle au préfixe le plus long l'emporte
+const NATURES_RAF_DEFAUT = {
+  '60': 'fournitures', '604': 'stcomp', '611': 'stcomp', '6122': 'materiel', '6132': 'materiel', '6135': 'materiel', '615': 'materiel',
+  '617': 'etudes', '6226': 'etudes', '621': 'mo', '64': 'mo', '61': 'autres', '62': 'autres'
+};
+const moisSuivant = m => { const [a, mm] = m.split('-').map(Number); return mm === 12 ? `${a + 1}-01` : `${a}-${String(mm + 1).padStart(2, '0')}`; };
+const otpDe = c => String((c && c.otp) || '').trim();
+// Un élément d'OTP appartient au chantier s'il est égal à son OTP ou en est un sous-élément (6009435-01, 6009435.02…)
+const otpCorrespond = (otpChantier, elt) => {
+  const a = norm(otpChantier).replace(/\s+/g, ''), b = norm(elt).replace(/\s+/g, '');
+  return !!a && (b === a || (b.startsWith(a) && /^[-./_]/.test(b.slice(a.length))));
+};
+
+function classerNature(nature, regles = NATURES_RAF_DEFAUT) {
+  const n = String(nature || '').replace(/\s/g, '');
+  let best = '', poste = 'autres';
+  Object.entries(regles || {}).forEach(([p, k]) => { if (p && n.startsWith(p) && p.length > best.length) { best = p; poste = k; } });
+  return poste;
+}
+const posteCout = (k, regles) => k.poste || classerNature(k.nature, regles);
+
+// Montant au format SAP : « 2,339.85- », « 1 234,56 », « -298.40 », « 298,40- »
+function montantSAP(v) {
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  let s = String(v ?? '').replace(/[\s €]/g, '');
+  if (!s) return 0;
+  let neg = false;
+  if (/-$/.test(s)) { neg = true; s = s.slice(0, -1); }
+  if (/^-/.test(s)) { neg = !neg; s = s.slice(1); }
+  const ip = s.lastIndexOf('.'), iv = s.lastIndexOf(',');
+  if (ip >= 0 && iv >= 0) s = ip > iv ? s.replace(/,/g, '') : s.replace(/\./g, '').replace(',', '.');
+  else if (iv >= 0) s = s.split(',').length > 2 ? s.replace(/,/g, '') : s.replace(',', '.');
+  else if (s.split('.').length > 2) s = s.replace(/\./g, '');
+  const n = parseFloat(s);
+  return isFinite(n) ? (neg ? -n : n) : 0;
+}
+// Date SAP « 30.09.2026 », « 30/09/2026 », ISO, objet Date ou numéro de série Excel → AAAA-MM-JJ
+function dateSAP(v) {
+  if (v instanceof Date) return isNaN(v) ? '' : isoLocal(v);
+  if (typeof v === 'number' && v > 20000 && v < 80000) return isoLocal(new Date(Math.round((v - 25569) * 86400000) + new Date().getTimezoneOffset() * 60000));
+  const s = String(v ?? '').trim();
+  let m = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : '';
+}
+
+/* Lecture d'un état SAP « postes individuels de coûts réels » (CJI3 / ZPS) exporté en Excel, CSV ou texte.
+   Repère la ligne d'en-tête, ignore les lignes de total (sans date), renvoie des coûts { otp, date, nature, montant… }. */
+const COLONNES_SAP = {
+  otp: [/^elt d.?otp$/, /element d.?otp/, /^elt.*otp/, /^otp$/, /^element$/],
+  montant: [/val.*devise perim/, /val.*d\.?tra/, /val.*dev.*obj/, /val.*dev.*soc/, /^montant/, /^valeur/],
+  date: [/^date de valeur/, /^date comptable/, /^date pce/, /^date/],
+  nature: [/^nat.*c(om)?pte/, /^nature/, /^element de couts?$/, /^cpte/],
+  libelle: [/description de l.?article/, /^libelle/, /^texte/, /^designation$/, /^denomination/, /designation du poste/],
+  fournisseur: [/^nom 1$/, /^nom du fournisseur/, /^nom fournisseur/],
+  codeFournisseur: [/^fourn/],
+  docAchat: [/^document d.?achat/, /^doc.*achat/, /^commande/],
+  piece: [/^n.? ?pce ref/, /^n.*piece/, /^piece/, /^n.? doc/, /^document$/],
+  objet: [/designation de l.?objet/]
+};
+function lireCoutsSAP(rows) {
+  rows = (rows || []).map(r => (r || []).map(x => x instanceof Date || typeof x === 'number' ? x : String(x ?? '').trim()));
+  let iEnTete = -1, cols = null;
+  for (let i = 0; i < Math.min(rows.length, 40) && iEnTete < 0; i++) {
+    const h = rows[i].map(x => norm(x).replace(/\s+/g, ' '));
+    const c = {};
+    const pris = new Set();
+    Object.entries(COLONNES_SAP).forEach(([k, motifs]) => {
+      for (const re of motifs) { const j = h.findIndex((x, jj) => !pris.has(jj) && re.test(x)); if (j >= 0) { c[k] = j; pris.add(j); break; } }
+    });
+    if (c.montant !== undefined && c.date !== undefined && (c.otp !== undefined || c.nature !== undefined)) { iEnTete = i; cols = c; }
+  }
+  if (iEnTete < 0) throw new Error('Colonnes SAP non reconnues (il faut au moins « Elt d\'OTP » ou « Nature compt. », une date et une valeur).');
+  const v = (r, k) => cols[k] === undefined ? '' : r[cols[k]];
+  const out = [];
+  rows.slice(iEnTete + 1).forEach(r => {
+    const date = dateSAP(v(r, 'date'));
+    const brut = v(r, 'montant');
+    if (!date || brut === '' || brut === undefined) return;
+    out.push({
+      otp: String(v(r, 'otp') || ''), date, nature: String(v(r, 'nature') || '').replace(/\s/g, ''), montant: Math.round(montantSAP(brut) * 100) / 100,
+      libelle: String(v(r, 'libelle') || ''), fournisseur: String(v(r, 'fournisseur') || ''), codeFournisseur: String(v(r, 'codeFournisseur') || ''),
+      docAchat: String(v(r, 'docAchat') || ''), piece: String(v(r, 'piece') || ''), objet: String(v(r, 'objet') || '')
+    });
+  });
+  return out;
+}
+
+// Texte SAP (« fichier local non converti ») : colonnes séparées par « | » ; sinon CSV classique
+function tableauTexte(txt) {
+  const lignes = txt.replace(/^﻿/, '').split(/\r?\n/);
+  if (lignes.filter(l => /^\s*\|/.test(l)).length >= 2) {
+    return lignes.filter(l => /^\s*\|/.test(l) && !/^\s*\|?-{3,}/.test(l)).map(l => l.trim().replace(/^\||\|$/g, '').split('|').map(x => x.trim()));
+  }
+  return parseCSV(txt);
+}
+
+// Coûts réels par poste et par mois, depuis SAP (coûts importés) ou depuis OmSmK (pointage × taux + commandes engagées)
+function sourceCouts(base, cid) {
+  const c = base.chantiers.find(x => x.id === cid);
+  const choix = (c && c.raf && c.raf.source) || 'auto';
+  if (choix !== 'auto') return choix;
+  return (base.couts || []).some(k => k.chantierId === cid) ? 'sap' : 'omsmk';
+}
+function mouvementsCouts(base, cid, regles) {
+  const c = base.chantiers.find(x => x.id === cid);
+  if (sourceCouts(base, cid) === 'sap') {
+    return (base.couts || []).filter(k => k.chantierId === cid).map(k => ({ date: k.date, poste: posteCout(k, regles), montant: num(k.montant) }));
+  }
+  const taux = num(c && c.tauxHoraire);
+  // Main d'œuvre : pointage journalier à sa date, plus les heures saisies à la semaine dans le suivi
+  const mo = pointagesDe(base, cid).filter(p => heuresPointage(p)).map(p => ({ date: p.date, poste: 'mo', montant: heuresPointage(p) * taux }))
+    .concat(base.suivi.filter(s => s.chantierId === cid && num(s.heures)).map(s => ({ date: s.semaine, poste: 'mo', montant: num(s.heures) * taux })));
+  const achats = (base.commandes || []).filter(x => x.chantierId === cid && commandeEngagee(x) && x.date)
+    .map(x => ({ date: x.date, poste: POSTE_RAF_ACHAT[x.categorie || 'Matériaux'] || 'autres', montant: montantCommande(x) }));
+  return mo.concat(achats);
+}
+
+function calcRAF(base, cid, mois, regles = NATURES_RAF_DEFAUT) {
+  const c = base.chantiers.find(x => x.id === cid);
+  const raf = (c && c.raf) || {};
+  const f = calcFinances(base, cid);
+  const finM = finDuMois(mois), debutExercice = mois.slice(0, 4) + '-01-01';
+  const mvts = mouvementsCouts(base, cid, regles).filter(x => x.date);
+  // Budget par poste : main d'œuvre du BTE, achats de la synthèse financière ; écrasable dans le RAF
+  const budgetAuto = { mo: f.budget.mo, fournitures: f.budget.materiaux, stcomp: f.budget.soustraitance, materiel: f.budget.materiel, autres: f.budget.divers };
+  const horizon = [];
+  for (let m = moisSuivant(mois), i = 0; i < 12; i++, m = moisSuivant(m)) horizon.push(m);
+  const tot = { reelM: 0, reelExercice: 0, reelCumul: 0, raf: 0, fin: 0, budget: 0, repartis: 0, aRepartir: 0, mois: Object.fromEntries(horizon.map(m => [m, 0])) };
+  const postes = POSTES_RAF.map(([k, lib]) => {
+    const p = (raf.postes || {})[k] || {};
+    const mv = mvts.filter(x => x.poste === k);
+    const somme = l => Math.round(l.reduce((t, x) => t + x.montant, 0) * 100) / 100;
+    const reelM = somme(mv.filter(x => x.date.slice(0, 7) === mois));
+    const reelExercice = somme(mv.filter(x => x.date >= debutExercice && x.date <= finM));
+    const reelCumul = somme(mv.filter(x => x.date <= finM));
+    const rafP = num(p.raf);
+    const repartition = Object.fromEntries(horizon.map(m => [m, num((p.mois || {})[m])]));
+    const repartis = Object.values(repartition).reduce((t, v) => t + v, 0);
+    const budget = p.budget !== undefined && p.budget !== '' ? num(p.budget) : num(budgetAuto[k]);
+    const l = { k, lib, reelM, reelExercice, reelCumul, raf: rafP, fin: reelCumul + rafP, budget, ecart: budget - (reelCumul + rafP), repartition, repartis, aRepartir: rafP - repartis };
+    ['reelM', 'reelExercice', 'reelCumul', 'raf', 'fin', 'budget', 'repartis', 'aRepartir'].forEach(x => { tot[x] += l[x]; });
+    horizon.forEach(m => { tot.mois[m] += repartition[m]; });
+    return l;
+  });
+  tot.ecart = tot.budget - tot.fin;
+  // Chiffre d'affaires : commande (marché + avenants) + reste à obtenir (devis en attente probables, révisions…)
+  const resteAObtenir = num(raf.resteAObtenir);
+  const devisAttente = (base.devis || []).filter(d => d.chantierId === cid && d.statut === 'emis').reduce((t, d) => t + montantDevis(d), 0);
+  const caFin = f.ca + resteAObtenir;
+  const sits = situationsDe(base, cid).filter(s => s.statut !== 'brouillon' && s.mois <= mois);
+  const der = sits[sits.length - 1];
+  const factureCumul = der ? calcSituation(base, cid, der.id).tot.cumul : 0;
+  const sitM = sits.filter(s => s.mois === mois).pop();
+  const factureM = sitM ? calcSituation(base, cid, sitM.id).tot.mois : 0;
+  const avancement = tot.fin > 0 ? Math.min(1, tot.reelCumul / tot.fin) : 0;
+  const caMerite = caFin * avancement;
+  const ecritures = caMerite - factureCumul;
+  const margeCumul = caMerite - tot.reelCumul;
+  const margeFin = caFin - tot.fin;
+  return {
+    mois, horizon, postes, tot, source: sourceCouts(base, cid),
+    ca: { initial: f.marcheBase, avenants: f.avenants, commande: f.ca, resteAObtenir, potentiel: devisAttente, fin: caFin, factureM, factureCumul, merite: caMerite },
+    avancement, fae: Math.max(0, ecritures), pca: Math.max(0, -ecritures),
+    marge: { cumul: margeCumul, tauxCumul: caMerite ? margeCumul / caMerite : 0, fin: margeFin, tauxFin: caFin ? margeFin / caFin : 0, prevue: f.margePrevue, tauxPrevu: f.tauxMargePrevue },
+    rafSaisi: postes.some(p => p.raf), valide: !!((raf.historique || {})[mois])
+  };
+}
+
+// RAF proposé par poste = reste du budget (fin d'affaire prévue − réel cumulé), jamais négatif
+function rafPropose(r, pfaMO) {
+  return Object.fromEntries(r.postes.map(p => [p.k, Math.max(0, Math.round(((p.k === 'mo' && pfaMO !== undefined ? Math.max(pfaMO, p.budget) : p.budget) - p.reelCumul) * 100) / 100)]));
+}
+
+// Répartition linéaire d'un montant sur des mois (arrondi au centime, le reliquat sur le dernier mois)
+function repartirLineaire(montant, mois) {
+  if (!mois.length) return {};
+  const part = Math.floor(num(montant) / mois.length * 100) / 100;
+  const out = Object.fromEntries(mois.map(m => [m, part]));
+  out[mois[mois.length - 1]] = Math.round((num(montant) - part * (mois.length - 1)) * 100) / 100;
+  return out;
+}
+
+// Tout ce qui est rattaché à l'OTP du chantier : heures pointées, commandes fournisseurs, facturation, coûts SAP
+function rattachementsOTP(base, cid) {
+  const pts = (base.pointages || []).filter(p => p.chantierId === cid);
+  const cmds = (base.commandes || []).filter(x => x.chantierId === cid && commandeEngagee(x));
+  const sits = situationsDe(base, cid).filter(s => s.statut !== 'brouillon');
+  const der = sits[sits.length - 1];
+  const couts = (base.couts || []).filter(k => k.chantierId === cid);
+  return {
+    pointage: { n: pts.filter(p => p.statut === 'present').length, heures: pts.reduce((t, p) => t + heuresPointage(p), 0) },
+    commandes: { n: cmds.length, montant: cmds.reduce((t, x) => t + montantCommande(x), 0) },
+    facturation: { n: sits.length, montant: der ? calcSituation(base, cid, der.id).tot.cumul : 0 },
+    couts: { n: couts.length, montant: couts.reduce((t, k) => t + num(k.montant), 0), dernier: couts.map(k => k.date).sort().pop() || '' }
+  };
+}

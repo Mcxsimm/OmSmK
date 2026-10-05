@@ -52,7 +52,7 @@ function bilanPDF() {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const b = bilanChantier(db, c.id), bl = bilanDe(c);
   let y = enTeteDocument(doc, 'DOSSIER DE CLÔTURE', c.nom, [`Établi le ${fmtDate(aujourdHui())}`, nomUser() ? `par ${nomUser()}` : '']);
-  const h1 = cadre(doc, 14, y, 88, 'Chantier', [c.nom, c.client ? `Maître d'ouvrage : ${c.client}` : '', c.imputation ? `Affaire ${c.imputation}` : ''].filter(Boolean));
+  const h1 = cadre(doc, 14, y, 88, 'Chantier', [c.nom, c.client ? `Maître d'ouvrage : ${c.client}` : '', refsChantier(c)].filter(Boolean));
   const h2 = cadre(doc, 108, y, 88, 'Dates', [`Début : ${fmtDate(b.delai.debut) || '-'}`, `Fin contractuelle : ${fmtDate(b.delai.finContrat) || '-'}`, `${b.delai.reception ? 'Réception' : 'Fin réelle'} : ${fmtDate(b.delai.finReelle) || '-'}${b.delai.retard ? ` (+${b.delai.retard} j)` : ''}`]);
   y += Math.max(h1, h2) + 7;
   const titre = t => { if (y > 255) { doc.addPage(); y = 20; } doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(14, 35, 64); doc.text(pdfTxt(t), 14, y); y += 2; doc.setDrawColor(232, 89, 12); doc.setLineWidth(0.6); doc.line(14, y, 30, y); doc.setLineWidth(0.2); y += 6; };

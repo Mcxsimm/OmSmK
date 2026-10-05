@@ -232,9 +232,9 @@ function exporterExcel() {
     ...deCh(db.suivi).sort((a, b) => a.semaine.localeCompare(b.semaine)).map(e => [e.semaine, semISO(e.semaine), e.ouvrage, e.phase, e.pct ?? '', num(e.heures)])]);
   const nomK = id => { const k = (db.compagnons || []).find(x => x.id === id); return k ? [`${k.prenom || ''} ${k.nom || ''}`.trim(), k.qualification || '', k.matricule || ''] : ['', '', '']; };
   const libSt = st => (STATUTS_POINTAGE.find(x => x[0] === st) || [st, st])[1];
-  add('Pointages', [['Date', 'N° semaine', 'Compagnon', 'Qualification', 'Matricule', 'Statut', 'Ouvrage', 'Phase', 'Heures', 'Intempéries h', 'Panier', 'Observation'],
+  add('Pointages', [['OTP', 'Date', 'N° semaine', 'Compagnon', 'Qualification', 'Matricule', 'Statut', 'Ouvrage', 'Phase', 'Heures', 'Intempéries h', 'Panier', 'Observation'],
     ...pointagesDe(db, c.id).flatMap(p => {
-      const base = [p.date, semISO(p.date), ...nomK(p.compagnonId), libSt(p.statut)];
+      const base = [otpDe(c), p.date, semISO(p.date), ...nomK(p.compagnonId), libSt(p.statut)];
       const fin = (i) => i === 0 ? [num(p.intemp), p.panier ? 1 : 0, p.obs || ''] : [0, 0, ''];
       const lignes = p.statut === 'present' && (p.lignes || []).length ? p.lignes : [{ ouvrage: '', phase: '', h: 0 }];
       return lignes.map((l, i) => [...base, l.ouvrage, l.phase, num(l.h), ...fin(i)]);
@@ -574,7 +574,7 @@ function situationPDF(sitId) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   let y = enTeteDocument(doc, `SITUATION DE TRAVAUX N° ${sit.numero}`, moisLong(sit.mois).replace(/^./, x => x.toUpperCase()),
     [`Établie le ${fmtDate(sit.date || aujourdHui())}`, prec ? `Précédente : n° ${prec.numero} (${moisLong(prec.mois)})` : 'Première situation']);
-  const h1 = cadre(doc, 14, y, 88, 'Chantier', [c.nom, c.adresse || '', c.imputation ? `Imputation ${c.imputation}` : ''].filter(Boolean));
+  const h1 = cadre(doc, 14, y, 88, 'Chantier', [c.nom, c.adresse || '', refsChantier(c, 'Imputation')].filter(Boolean));
   const h2 = cadre(doc, 108, y, 88, 'Maître d\'ouvrage', [c.client || '—', c.conducteur ? `Conducteur de travaux : ${c.conducteur}` : ''].filter(Boolean));
   y += Math.max(h1, h2) + 7;
   doc.autoTable(Object.assign({}, STYLE_TABLE, {
@@ -614,7 +614,7 @@ function bonCommandePDF(cmdId) {
   if (!globalThis.jspdf) return toast('Bibliothèque PDF non chargée.', 'erreur');
   const { jsPDF } = globalThis.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  let y = enTeteDocument(doc, 'BON DE COMMANDE', `N° ${x.numero}`, [`Date : ${fmtDate(x.date) || fmtDate(aujourdHui())}`, x.categorie || '']);
+  let y = enTeteDocument(doc, 'BON DE COMMANDE', `N° ${x.numero}`, [`Date : ${fmtDate(x.date) || fmtDate(aujourdHui())}`, x.categorie || '', (x.otp || otpDe(c)) ? `Imputation OTP ${x.otp || otpDe(c)}` : ''].filter(Boolean));
   const h1 = cadre(doc, 14, y, 88, 'Fournisseur', [x.fournisseur || '—']);
   const h2 = cadre(doc, 108, y, 88, 'Livraison', [c.nom, c.adresse || '', x.livraisonPrevue ? `Date souhaitée : ${fmtDate(x.livraisonPrevue)}` : '', c.chef ? `Contact chantier : ${c.chef}` : ''].filter(Boolean));
   y += Math.max(h1, h2) + 7;
@@ -654,7 +654,7 @@ function releveHeuresPDF(lun) {
   const comps = compagnonsDe(c.id, true).filter(k => k.actif !== false || pointes.has(k.id));
   let y = enTeteDocument(doc, 'RELEVÉ D\'HEURES', `Semaine ${semISO(lun)} — du ${fmtDate(lun)} au ${fmtDate(addDays(lun, 6))}`,
     [`Établi le ${fmtDate(aujourdHui())}`, `${fmt(hjDe(c))} h par jour`]);
-  const h1 = cadre(doc, 14, y, 88, 'Chantier', [c.nom, c.adresse || '', c.imputation ? `Imputation ${c.imputation}` : ''].filter(Boolean));
+  const h1 = cadre(doc, 14, y, 88, 'Chantier', [c.nom, c.adresse || '', refsChantier(c, 'Imputation')].filter(Boolean));
   const h2 = cadre(doc, 108, y, 88, 'Encadrement', [c.conducteur ? `Conducteur de travaux : ${c.conducteur}` : 'Conducteur de travaux : —', c.chef ? `Chef de chantier : ${c.chef}` : ''].filter(Boolean));
   y += Math.max(h1, h2) + 7;
   const code = st => (STATUTS_POINTAGE.find(s => s[0] === st) || [])[2] || '';

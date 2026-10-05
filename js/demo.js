@@ -14,7 +14,7 @@ function construireDemo(lundiCourant) {
 
   const chantier = {
     id: cid, nom: 'CIGV – Phase 1', client: 'CIGV', adresse: '', metier: 'Étanchéité', support: 'Béton',
-    imputation: '12345678', agence: 'Excellence', conducteur: 'Marc', chef: '',
+    otp: '6001234', imputation: '12345678', agence: 'Excellence', conducteur: 'Marc', chef: '',
     marcheHT: 22650, margeCommerciale: 0.2, tauxHoraire: 30, heuresJour: 7.5,
     dateDebut: s1, dateFin: addDays(s1, 34), creeLe: new Date().toISOString()
   };

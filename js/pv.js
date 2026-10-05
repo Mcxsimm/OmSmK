@@ -59,7 +59,7 @@ function pvPDF(id) {
   if (!p || !globalThis.jspdf) return toast('Bibliothèque PDF non chargée.', 'erreur');
   const { jsPDF } = globalThis.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  let y = enTeteDocument(doc, p.type === 'reception' ? 'PROCÈS-VERBAL DE RÉCEPTION' : 'PV DE LEVÉE DES RÉSERVES', fmtDate(p.date, true), [c.imputation ? `Affaire ${c.imputation}` : '']);
+  let y = enTeteDocument(doc, p.type === 'reception' ? 'PROCÈS-VERBAL DE RÉCEPTION' : 'PV DE LEVÉE DES RÉSERVES', fmtDate(p.date, true), [refsChantier(c)]);
   const h1 = cadre(doc, 14, y, 88, 'Chantier', [c.nom, c.adresse || ''].filter(Boolean));
   const h2 = cadre(doc, 108, y, 88, 'Maître d\'ouvrage', [c.client || '—'].concat(contactsDe(c.id).filter(k => k.role === 'Maître d\'œuvre').slice(0, 1).map(k => `Maître d'œuvre : ${k.societe || k.nom}`)));
   y += Math.max(h1, h2) + 8;

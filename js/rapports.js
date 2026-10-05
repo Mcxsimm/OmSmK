@@ -37,7 +37,7 @@ async function rapportMensuelPDF(mois, opts = {}) {
   const pl = calcPlanning(db, c.id, S.au < aujourdHui() ? S.au : aujourdHui());
   const NAVY = [14, 35, 64], GRIS = [102, 112, 133], TEXTE = [16, 24, 40];
   let y = enTeteDocument(doc, 'RAPPORT MENSUEL D\'AVANCEMENT', moisLong(mois).replace(/^./, x => x.toUpperCase()), [`Établi le ${fmtDate(aujourdHui())}`, nomUser() ? `par ${nomUser()}` : '']);
-  const h1 = cadre(doc, 14, y, 88, 'Chantier', [c.nom, c.adresse || '', c.imputation ? `Affaire ${c.imputation}` : ''].filter(Boolean));
+  const h1 = cadre(doc, 14, y, 88, 'Chantier', [c.nom, c.adresse || '', refsChantier(c)].filter(Boolean));
   const h2 = cadre(doc, 108, y, 88, 'Destinataires', [c.client ? `Maître d'ouvrage : ${c.client}` : 'Maître d\'ouvrage', ...contactsDe(c.id).filter(k => k.role === 'Maître d\'œuvre').slice(0, 1).map(k => `Maître d'œuvre : ${k.societe || k.nom}`)]);
   y += Math.max(h1, h2) + 7;
   const titre = (t, besoin = 30) => {

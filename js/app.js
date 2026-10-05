@@ -10,7 +10,7 @@ const UI_KEY = 'omsmk_ui';
 const REF = REFERENTIEL;
 
 /* ================================ État =================================== */
-function dbVide() { return { version: 1, chantiers: [], ops: [], suivi: [], taches: [], journal: [], reserves: [], checklists: {}, postes: [], situations: [], commandes: [], compagnons: [], pointages: [], contacts: [], reunions: [], actions: [], securite: [], photos: [], pvs: [], affectations: [], devis: [], documents: [] }; }
+function dbVide() { return { version: 1, chantiers: [], ops: [], suivi: [], taches: [], journal: [], reserves: [], checklists: {}, postes: [], situations: [], commandes: [], compagnons: [], pointages: [], contacts: [], reunions: [], actions: [], securite: [], photos: [], pvs: [], affectations: [], devis: [], documents: [], couts: [] }; }
 function chargerDB() {
   const d = lireJSON(STORE_KEY, null);
   return d && Array.isArray(d.chantiers) ? Object.assign(dbVide(), d) : dbVide();
@@ -67,7 +67,7 @@ const ESPACES = [
   { id: 'chantier', t: 'Chantier', ic: 'building-2', pages: [['hubChantier', 'Vue d\'ensemble', 'layout-dashboard'], ['tableau', 'Indicateurs', 'gauge'], ['planning', 'Planning', 'chart-gantt'], ['suivi', 'Suivi hebdo', 'trending-up'], ['bte', 'Budget BTE', 'calculator'], ['preparation', 'Préparation', 'list-checks'], ['bilan', 'Bilan', 'flag']] },
   { id: 'terrain', t: 'Terrain', ic: 'hard-hat', pages: [['hubTerrain', 'Vue d\'ensemble', 'layout-dashboard'], ['pointage', 'Pointage', 'clock'], ['terrain', 'Saisie terrain', 'clipboard-check'], ['journal', 'Journal & photos', 'camera'], ['qualite', 'Qualité', 'shield-check'], ['securite', 'Sécurité', 'shield-alert']] },
   { id: 'coordination', t: 'Coordination', ic: 'messages-square', pages: [['hubCoordination', 'Vue d\'ensemble', 'layout-dashboard'], ['actions', 'Actions', 'list-todo'], ['reunions', 'Réunions & CR', 'messages-square'], ['documents', 'Documents', 'folder-open'], ['annuaire', 'Annuaire', 'contact']] },
-  { id: 'gestion', t: 'Gestion', ic: 'wallet', pages: [['hubGestion', 'Vue d\'ensemble', 'layout-dashboard'], ['finances', 'Synthèse financière', 'wallet'], ['situations', 'Situations', 'receipt'], ['devis', 'Devis & relances', 'file-plus'], ['commandes', 'Commandes', 'shopping-cart']] }
+  { id: 'gestion', t: 'Gestion', ic: 'wallet', pages: [['hubGestion', 'Vue d\'ensemble', 'layout-dashboard'], ['finances', 'Synthèse financière', 'wallet'], ['situations', 'Situations', 'receipt'], ['devis', 'Devis & relances', 'file-plus'], ['commandes', 'Commandes', 'shopping-cart'], ['raf', 'RAF projet', 'calculator']] }
 ];
 const TITRES = Object.assign(Object.fromEntries(ESPACES.flatMap(e => e.pages.map(([v, t]) => [v, t]))), { parametres: 'Paramètres' });
 const espaceDe = v => ESPACES.find(e => e.pages.some(p => p[0] === v)) || null;
@@ -129,7 +129,7 @@ function renderSyncPill() {
 }
 
 const VUES = { tableau: vTableau, terrain: vTerrain, suivi: vSuivi, bte: vBTE, journal: vJournal, qualite: vQualite, portefeuille: vPortefeuille, parametres: vParametres, finances: c => vFinances(c), situations: c => vSituations(c), commandes: c => vCommandes(c), pointage: c => vPointage(c),
-  journee: () => vJournee(), charge: () => vCharge(), preparation: c => vPreparation(c), bilan: c => vBilan(c), documents: c => vDocuments(c), devis: c => vDevis(c), hubChantier: c => vHubChantier(c), hubTerrain: c => vHubTerrain(c), hubCoordination: c => vHubCoordination(c), hubGestion: c => vHubGestion(c), planning: c => vPlanning(c), securite: c => vSecurite(c), actions: c => vActions(c), reunions: c => vReunions(c), annuaire: c => vAnnuaire(c) };
+  journee: () => vJournee(), charge: () => vCharge(), preparation: c => vPreparation(c), bilan: c => vBilan(c), documents: c => vDocuments(c), devis: c => vDevis(c), raf: c => vRAF(c), hubChantier: c => vHubChantier(c), hubTerrain: c => vHubTerrain(c), hubCoordination: c => vHubCoordination(c), hubGestion: c => vHubGestion(c), planning: c => vPlanning(c), securite: c => vSecurite(c), actions: c => vActions(c), reunions: c => vReunions(c), annuaire: c => vAnnuaire(c) };
 
 function render() {
   if (!ch() && db.chantiers.length) ui.chantierId = db.chantiers[0].id;
@@ -305,7 +305,7 @@ function vTableau(c) {
 
   const fiche = `<div class="card"><div class="card-head"><h3>Fiche chantier</h3><button class="btn ghost sm" data-act="chantierEdit" data-id="${esc(c.id)}">${icone('pencil', 'sm')}Modifier</button></div>
     <div class="card-body"><dl class="dl">
-      ${[['Client', c.client], ['Métier', [c.metier, c.support && 'support ' + c.support.toLowerCase()].filter(Boolean).join(' · ')], ['N° d\'imputation', c.imputation], ['Agence', c.agence],
+      ${[['Client', c.client], ['Métier', [c.metier, c.support && 'support ' + c.support.toLowerCase()].filter(Boolean).join(' · ')], ['Code OTP', c.otp], ['N° d\'imputation', c.imputation], ['Agence', c.agence],
          ['Conducteur de travaux', c.conducteur], ['Chef de chantier', c.chef], ['Marché HT', num(c.marcheHT) ? fmtE(c.marcheHT) : ''],
          ['Taux horaire équipe', num(c.tauxHoraire) ? fmtE(c.tauxHoraire) + ' / h' : ''], ['Check-list CDT', `${cdt.faits} / ${cdt.total} points`]]
         .filter(r => String(r[1] || '').trim()).map(r => `<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join('')}
@@ -730,7 +730,8 @@ function modalChantier(c) {
     ${champ('chNom', 'Nom du chantier *', e.nom, 'text', 'placeholder="ex : Résidence Les Tilleuls — Bât. A"')}
     <div class="form-grid">${champ('chClient', 'Client / maître d\'ouvrage', e.client)}${champ('chAdresse', 'Adresse', e.adresse)}
       ${selectHTML('chMetier', 'Métier', ['Étanchéité', 'Façade', 'Autre'], e.metier)}${selectHTML('chSupport', 'Support', ['Béton', 'Acier', 'Bois', 'Parpaing', 'Autre'], e.support)}
-      ${champ('chImput', 'N° d\'imputation', e.imputation)}${champ('chAgence', 'Agence', e.agence)}</div>
+      ${champ('chOtp', 'Code OTP (SAP)', e.otp, 'text', 'placeholder="ex : 6009435"')}${champ('chImput', 'N° d\'imputation', e.imputation)}${champ('chAgence', 'Agence', e.agence)}</div>
+    <p class="small muted">Le code OTP relie le chantier au pointage, aux commandes, à la facturation et aux coûts réels SAP (RAF projet).</p>
     <div class="form-section">Équipe et planning</div>
     <div class="form-grid">${champ('chCdt', 'Conducteur de travaux', e.conducteur)}${champ('chChef', 'Chef de chantier', e.chef)}
       ${champ('chDebut', 'Date de début', e.dateDebut, 'date')}${champ('chFin', 'Date de fin prévue', e.dateFin, 'date')}</div>
@@ -961,7 +962,7 @@ const ACT = {
     const id = val('chId');
     const data = {
       nom, client: val('chClient'), adresse: val('chAdresse'), metier: val('chMetier'), support: val('chSupport'),
-      imputation: val('chImput'), agence: val('chAgence'), conducteur: val('chCdt'), chef: val('chChef'),
+      otp: val('chOtp'), imputation: val('chImput'), agence: val('chAgence'), conducteur: val('chCdt'), chef: val('chChef'),
       marcheHT: num(val('chMarche')), margeCommerciale: num(val('chMarge')) / 100, tauxHoraire: num(val('chTaux')),
       heuresJour: num(val('chHj')) || REF.heuresJourDefaut, dateDebut: val('chDebut'), dateFin: val('chFin')
     };
@@ -1290,7 +1291,7 @@ function insererOp(op) {
 
 function supprimerChantier(cid) {
   db.chantiers = db.chantiers.filter(c => c.id !== cid);
-  ['ops', 'suivi', 'taches', 'journal', 'reserves', 'postes', 'situations', 'commandes', 'compagnons', 'pointages', 'contacts', 'reunions', 'actions', 'securite', 'photos', 'pvs', 'devis', 'documents', 'affectations'].forEach(k => { db[k] = (db[k] || []).filter(x => x.chantierId !== cid); });
+  ['ops', 'suivi', 'taches', 'journal', 'reserves', 'postes', 'situations', 'commandes', 'compagnons', 'pointages', 'contacts', 'reunions', 'actions', 'securite', 'photos', 'pvs', 'devis', 'documents', 'affectations', 'couts'].forEach(k => { db[k] = (db[k] || []).filter(x => x.chantierId !== cid); });
   delete db.checklists[cid];
   if (ui.chantierId === cid) ui.chantierId = db.chantiers[0] ? db.chantiers[0].id : null;
 }

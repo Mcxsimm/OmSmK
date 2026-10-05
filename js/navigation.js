@@ -22,7 +22,7 @@ const grilleTuiles = ts => `<div class="tuiles">${ts.map(tuile).join('')}</div>`
 
 function enTeteEspace(c, eyebrow) {
   const st = statutChantier(c);
-  return enTetePage({ eyebrow, titre: c.nom, sous: [`<span class="badge ${st.cls} dot">${st.txt}</span>`, sousInfo('building-2', c.client), c.dateDebut ? sousInfo('calendar', `${fmtDate(c.dateDebut)} → ${fmtDate(c.dateFin) || '…'}`) : ''] });
+  return enTetePage({ eyebrow, titre: c.nom, sous: [`<span class="badge ${st.cls} dot">${st.txt}</span>`, badgeOTP(c), sousInfo('building-2', c.client), c.dateDebut ? sousInfo('calendar', `${fmtDate(c.dateDebut)} → ${fmtDate(c.dateFin) || '…'}`) : ''] });
 }
 
 // Trois points d'attention au plus, avec un lien vers le détail
@@ -121,6 +121,7 @@ function vHubGestion(c) {
     { v: 'situations', ic: 'receipt', titre: 'Situations', val: derSit ? `N° ${derSit.numero}` : 'Aucune', sous: derSit ? `${moisLong(derSit.mois)} · ${libStatut(STATUTS_SITUATION, derSit.statut).toLowerCase()} · ${pc(f.avFinancier)} facturé` : 'première situation à établir',
       etat: f.ca && !sitMois && c.dateDebut && c.dateDebut <= auj ? 'alerte' : '', badge: f.ca && !sitMois && c.dateDebut && c.dateDebut <= auj ? 'mois à établir' : '', action: { act: 'sitNew', lib: 'Nouvelle situation', ic: 'plus' } },
     (() => { const att = devisDe(c.id).filter(d => d.statut === 'emis'), imp = situationsImpayees(db, c.id), rel = devisARelancer(db, c.id); return { v: 'devis', ic: 'file-plus', titre: 'Devis & relances', val: imp.length ? `${fmtE(imp.reduce((t, x) => t + x.ttc, 0))}` : fmtE(att.reduce((t, d) => t + montantDevis(d), 0)), sous: imp.length ? `${imp.length} situation(s) impayée(s)` : `${att.length} devis en attente${rel.length ? ` · ${rel.length} à relancer` : ''}`, etat: imp.length || rel.length ? 'alerte' : '', badge: imp.length || rel.length ? `${imp.length + rel.length} relance(s)` : '', action: { act: 'devisNew', lib: 'Nouveau devis', ic: 'plus' } }; })(),
+    (() => { const r = calcRAF(db, c.id, auj.slice(0, 7), reglesNatures()); const aFaire = !r.valide && (r.tot.reelCumul > 0 || r.ca.commande > 0); return { v: 'raf', ic: 'calculator', titre: 'RAF projet', val: r.rafSaisi ? fmtE(r.marge.fin) : '—', sous: `${otpDe(c) ? `OTP ${esc(otpDe(c))} · ` : 'OTP à renseigner · '}${r.rafSaisi ? `marge fin d'affaire ${pc(r.marge.tauxFin)}` : 'reste à faire à saisir'}`, etat: aFaire ? 'alerte' : '', badge: r.valide ? 'validé' : (aFaire ? `${moisCourt(auj.slice(0, 7))} à valider` : ''), action: { nav: 'raf', lib: 'Saisir le RAF', ic: 'pencil' } }; })(),
     { v: 'commandes', ic: 'shopping-cart', titre: 'Commandes & achats', val: fmtE(engage), sous: retardLiv.length ? `${retardLiv.length} livraison(s) en retard` : `engagé · ${cmds.length} commande(s)`, etat: retardLiv.length ? 'alerte' : '', action: { act: 'cmdNew', lib: 'Nouvelle commande', ic: 'plus' } }
   ];
   const resume = f.ca ? `<div class="resume">
@@ -185,7 +186,7 @@ function entreesRecherche() {
   ESPACES.forEach(e => e.pages.forEach(([v, t, ic]) => out.push({ ic, t, s: e.t, run: () => allerA(v), besoinCh: e.id !== 'accueil' })));
   out.push({ ic: 'settings', t: 'Paramètres', s: 'Compte', run: () => allerA('parametres') });
   CREATIONS.forEach(x => out.push({ ic: x.ic, t: x.t, s: 'Créer', run: () => { fermerModal(); x.go(); }, besoinCh: true }));
-  db.chantiers.forEach(c => out.push({ ic: 'building-2', t: c.nom, s: 'Chantier' + (c.client ? ' · ' + c.client : ''), run: () => { ui.chantierId = c.id; ui.zone = null; allerA('hubChantier'); } }));
+  db.chantiers.forEach(c => out.push({ ic: 'building-2', t: c.nom, s: 'Chantier' + (c.otp ? ' · OTP ' + c.otp : '') + (c.client ? ' · ' + c.client : ''), run: () => { ui.chantierId = c.id; ui.zone = null; allerA('hubChantier'); } }));
   const c = ch();
   if (c) {
     contactsDe(c.id).forEach(k => out.push({ ic: 'contact', t: libContact(k), s: `Annuaire · ${k.role}${k.tel ? ' · ' + k.tel : ''}`, run: () => allerA('annuaire') }));

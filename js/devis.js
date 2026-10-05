@@ -90,7 +90,7 @@ function devisPDF(id) {
   const { jsPDF } = globalThis.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   let y = enTeteDocument(doc, 'DEVIS — TRAVAUX SUPPLÉMENTAIRES', `N° ${d.numero}`, [`Date : ${fmtDate(d.dateEmission || aujourdHui())}`, d.demandePar ? `Demandé par : ${d.demandePar}` : '']);
-  const h1 = cadre(doc, 14, y, 88, 'Chantier', [c.nom, c.adresse || '', c.imputation ? `Affaire ${c.imputation}` : ''].filter(Boolean));
+  const h1 = cadre(doc, 14, y, 88, 'Chantier', [c.nom, c.adresse || '', refsChantier(c)].filter(Boolean));
   const dest = destinataireClient(c);
   const h2 = cadre(doc, 108, y, 88, 'Destinataire', [c.client || '—', dest ? `${dest.nom || ''} — ${dest.societe || ''}` : ''].filter(Boolean));
   y += Math.max(h1, h2) + 7;

@@ -42,12 +42,15 @@ jamais portée par la couleur seule (légende, pointillés, étiquettes directes
 | 🧾 **Situations mensuelles** | Décomposition du marché (DPGF, import CSV / Excel) et avenants ; situation de travaux mensuelle par poste (% cumulé, montant du mois, retenue de garantie, compte prorata, TVA), circuit brouillon → transmise MOE → validée → facturée → payée, PDF à transmettre au maître d'œuvre. |
 | 🧾 **Devis & relances** | Devis de travaux supplémentaires (lignes, PDF « bon pour accord »), émis → accepté (avenant créé automatiquement) ou refusé, relance après 15 jours sans réponse ; impayés des situations après l'échéance de paiement (délai réglable), relance par e-mail et lettre de relance PDF. |
 | 🛒 **Commandes & achats** | Commandes fournisseurs avec lignes (catalogue matériaux importé du BTE), statut jusqu'à la livraison et la facture, retards de livraison, engagé vs budget achats, bon de commande PDF. |
+| 🧮 **RAF projet (OTP)** | Calqué sur la saisie du RAF projet SAP : le **code OTP** du chantier relie pointage, commandes fournisseurs, facturation et coûts réels. Par poste (ST moyen, ST compétence, main d'œuvre, fournitures, matériel, études techniques, autres dépenses) : réel du mois, de l'exercice et cumulé, budget, **reste à faire**, fin d'affaire, écart, lissage mensuel et reste à répartir. Contrat (commande initiale, avenants, reste à obtenir, commande potentielle), **CA mérité**, **FAE / PCA**, marge brute cumulée et fin d'affaire, RAF proposé d'après le budget restant, validation mensuelle avec historique, export Excel. **Import de l'état SAP « postes individuels de coûts réels »** (Excel, CSV ou texte) : rattachement par élément d'OTP, classement par nature comptable (règles modifiables), poste forçable ligne par ligne. Sans import, le réel vient du pointage × taux horaire et des commandes engagées. |
 | 💼 **Portefeuille** | Tous les chantiers avec avancement, écarts, impact projeté et réserves ; totaux consolidés. |
 | ⚙️ **Paramètres** | Fiche chantier, synchronisation en ligne (équipes, partage), imports, exports Excel / PDF, sauvegarde et restauration JSON, démo. |
 
 ### Calculs financiers
 - Situation : cumul = % cumulé × montant du poste ; montant du mois = cumul − cumul de la situation précédente ; retenue de garantie et compte prorata sur le HT du mois, puis TVA
 - Fin d'affaire : main d'œuvre = budget − impact projeté du suivi hebdomadaire ; achats = le plus élevé entre budget et engagé ; marge = CA − déboursé
+- RAF : fin d'affaire = réel cumulé + reste à faire ; CA mérité = CA fin d'affaire (commande + reste à obtenir) × réel cumulé ÷ coûts fin d'affaire ; FAE = CA mérité − facturé cumulé s'il est positif, PCA sinon ; marge fin d'affaire = CA fin d'affaire − coûts fin d'affaire
+- Le code OTP figure sur les situations, bons de commande, relevés d'heures, devis, PV et rapports, et dans l'export Excel du pointage
 - L'en-tête des documents (raison sociale, adresse, SIRET) se règle dans Paramètres → Entreprise
 
 ### Calculs (identiques au fichier de suivi standard SMAC)
@@ -122,6 +125,7 @@ js/rapports.js        Rapport mensuel d'avancement pour le maître d'œuvre
 js/agenda.js          Agenda du téléphone (.ics) et notifications de rappel
 js/charge.js          Plan de charge des équipes (tous chantiers)
 js/devis.js           Devis de travaux supplémentaires, relances de devis et d'impayés
+js/raf.js             RAF projet par OTP, import des coûts réels SAP
 js/preparation.js     Préparation de chantier et registre des documents (visas, DOE)
 js/bilan.js           Bilan de fin de chantier, retour d'expérience, dossier de clôture
 js/donnees.js         Imports, exports Excel, rapport PDF, situation, bon de commande et relevé d'heures PDF, QR codes

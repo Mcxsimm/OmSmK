@@ -212,6 +212,7 @@ function modalCommande(cmd) {
     <div class="form-grid">${champ('cmNum', 'N° de commande', e.numero)}${champ('cmFourn', 'Fournisseur *', e.fournisseur, 'text', 'list="dlFourn"')}
       ${champ('cmObjet', 'Objet', e.objet, 'text', 'placeholder="ex : Isolant et membranes phase 1"')}${selectHTML('cmCat', 'Catégorie', CATEGORIES_ACHAT, e.categorie)}
       ${champ('cmDate', 'Date de commande', e.date, 'date')}${selectHTML('cmStatut', 'Statut', STATUTS_COMMANDE, e.statut)}
+      ${champ('cmOtp', 'Imputation (élément d\'OTP)', e.otp ?? otpDe(c), 'text', 'placeholder="OTP du chantier"')}
       ${champ('cmLivP', 'Livraison prévue', e.livraisonPrevue, 'date')}${champ('cmLivR', 'Livraison réelle', e.livraisonReelle, 'date')}</div>
     <div class="form-section" style="display:flex;justify-content:space-between;align-items:center">Lignes de commande <button class="btn sm" data-act="cmLigneAjout">${icone('plus', 'sm')}Ligne</button></div>
     <div id="cmLignes" style="border:1px solid var(--border);border-radius:10px;overflow:auto"></div>
@@ -378,7 +379,7 @@ Object.assign(ACT, {
     if (!fournisseur) return toast('Indiquez le fournisseur', 'alerte');
     const id = val('cmId');
     const data = {
-      numero: val('cmNum'), fournisseur, objet: val('cmObjet'), categorie: val('cmCat'), date: val('cmDate'), statut: val('cmStatut'),
+      numero: val('cmNum'), otp: val('cmOtp'), fournisseur, objet: val('cmObjet'), categorie: val('cmCat'), date: val('cmDate'), statut: val('cmStatut'),
       livraisonPrevue: val('cmLivP'), livraisonReelle: val('cmLivR'), factureNumero: val('cmFactNum'), factureMontant: num(val('cmFactMt')), notes: val('cmNotes'),
       lignes: _cmdLignes.filter(l => l.designation || num(l.quantite) || num(l.pu))
     };

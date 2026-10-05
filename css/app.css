@@ -791,3 +791,11 @@ tr.charge-ch td { background: var(--surface-2); }
 .prep-st.st-fait { background: var(--pos-soft); color: var(--pos); border-color: var(--pos-line); font-weight: 600; }
 .prep-st.st-encours { background: var(--info-soft); color: var(--info); border-color: var(--info-line); font-weight: 600; }
 @media (max-width: 760px) { .prep-item { flex-direction: column; align-items: stretch; gap: 8px; } .prep-champs .input { flex: 1; } }
+
+/* RAF projet (OTP) */
+.resume.r4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 760px) { .resume.r4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.resume > .row-link { cursor: pointer; }
+.resume > .row-link:hover { background: var(--surface-2); }
+.table tr.sous-total td { background: var(--surface-2); }
+.table td.warn, .dl dd.warn { color: var(--warn); }

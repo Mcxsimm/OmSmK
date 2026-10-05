@@ -239,6 +239,20 @@ function exporterExcel() {
       const lignes = p.statut === 'present' && (p.lignes || []).length ? p.lignes : [{ ouvrage: '', phase: '', h: 0 }];
       return lignes.map((l, i) => [...base, l.ouvrage, l.phase, num(l.h), ...fin(i)]);
     })]);
+  const pl = calcPlanning(db, c.id);
+  add('Planning', [['Ouvrage', 'Phase', 'Budget h', 'Début', 'Fin', 'Durée (j ouvrés)', '% réalisé', 'Fin projetée', 'Glissement (j)', 'Statut'],
+    ...pl.rows.map(r => [r.ouvrage, r.phase, +r.budget.toFixed(1), r.debut, r.fin, r.duree, +r.pct.toFixed(3), r.finProjetee, r.glissement, (STATUTS_PHASE[r.statut] || [''])[0]]),
+    [], ['Jalon', 'Date', 'Atteint'], ...pl.jalons.map(j => [j.libelle, j.date, j.fait ? 'oui' : ''])]);
+  add('Actions', [['Action', 'Responsable', 'Échéance', 'État', 'Origine', 'Créée le', 'Faite le', 'Commentaire'],
+    ...actionsDe(db, c.id).map(a => [a.libelle, a.responsable, a.echeance, actionOuverte(a) ? (actionEnRetard(a) ? 'En retard' : 'Ouverte') : 'Faite', libOrigine(a), a.creeLe, a.faiteLe, a.note || ''])]);
+  add('Réunions', [['N°', 'Type', 'Date', 'Lieu', 'Présents', 'Points abordés', 'Diffusé le'],
+    ...reunionsDe(c.id).map(r => [num(r.numero), r.type, r.date, r.lieu, (r.participants || []).filter(x => x.statut === 'present').map(x => x.societe || x.nom).join(', '), (r.points || []).map(x => `${x.titre} : ${x.texte || 'RAS'}`).join('\n'), r.diffuseLe || ''])]);
+  add('Annuaire', [['Rôle', 'Société', 'Nom', 'Fonction', 'Téléphone', 'E-mail'], ...contactsDe(c.id).map(k => [k.role, k.societe, k.nom, k.fonction, k.tel, k.email])]);
+  add('Sécurité', [['Date', 'Type', 'Objet', 'Personnes', 'Détail'],
+    ...secuDe(c.id).map(x => [x.date, TYPES_SECU[x.type].lib,
+      x.type === 'causerie' ? x.theme : x.type === 'accueil' ? nomK(x.compagnonId) : x.type === 'permis' ? x.zone : x.type === 'evenement' ? x.nature : 'Visite',
+      (x.participants || x.intervenants || []).map(nomK).join(', ') || nomK(x.victimeId) || x.auteur || '',
+      x.type === 'visite' ? `${Object.values(x.items || {}).filter(v => v === 'nc').length} non-conformité(s)` : x.type === 'permis' ? (x.surveillance && x.surveillance.fait ? `surveillance ${x.surveillance.heure}` : 'surveillance à confirmer') : (x.notes || x.description || '')])]);
   add('Terrain', [['Chantier', 'Zone', 'Lot', 'Tache', 'Fait', 'Fait le', 'Par', 'Observation', 'Non prévu'],
     ...deCh(db.taches).map(t => [c.nom, t.zone, t.lot, t.tache, estFait(t.fait) ? 'VRAI' : 'FAUX', t.faitLe, t.faitPar, t.obs, t.ajout ? 'oui' : ''])]);
   add('Journal', [['Date', 'Météo', 'Effectif', 'Heures', 'Intempérie', 'Cause', 'Texte', 'Auteur'],

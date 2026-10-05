@@ -15,7 +15,7 @@
 // deno-lint-ignore-file no-unused-vars
 'use strict';
 
-const SYNC_COLLECTIONS = { op: 'ops', suivi: 'suivi', tache: 'taches', journal: 'journal', reserve: 'reserves', poste: 'postes', situation: 'situations', commande: 'commandes', compagnon: 'compagnons', pointage: 'pointages' };
+const SYNC_COLLECTIONS = { op: 'ops', suivi: 'suivi', tache: 'taches', journal: 'journal', reserve: 'reserves', poste: 'postes', situation: 'situations', commande: 'commandes', compagnon: 'compagnons', pointage: 'pointages', contact: 'contacts', reunion: 'reunions', action: 'actions', securite: 'securite', photo: 'photos', pv: 'pvs', affectation: 'affectations', devis: 'devis', document: 'documents' };
 
 // Empreinte FNV-1a 32 bits (suffisante pour détecter un changement)
 function empreinte(str) {

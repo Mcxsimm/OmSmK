@@ -25,34 +25,25 @@
 </head>
 <body>
   <div class="app">
-    <aside class="sidebar" id="sidebar" aria-label="Navigation principale">
-      <div class="side-brand">
-        <div class="logo-mark">OS</div>
-        <div class="logo-text">OmSmK<small>Pilotage de chantiers</small></div>
-      </div>
-      <button class="chantier-switch" id="chantierSwitch" aria-haspopup="listbox">
-        <span class="cs-txt"><span class="cs-lbl">Chantier</span><span class="cs-nom" id="chantierNom">—</span></span>
-        <span data-icone="chevrons-up-down"></span>
+    <header class="topbar">
+      <button class="brand" data-nav="journee" aria-label="Accueil"><span class="logo-mark">OS</span><span class="logo-text">OmSmK</span></button>
+      <button class="chantier-switch" id="chantierSwitch" aria-haspopup="listbox" title="Changer de chantier">
+        <span data-icone="building-2"></span><span class="cs-nom" id="chantierNom">—</span><span data-icone="chevron-down"></span>
       </button>
-      <nav class="side-nav" id="sideNav"></nav>
-      <div class="side-foot" id="sideFoot"></div>
-    </aside>
-    <div class="backdrop" id="backdrop"></div>
-
-    <div class="main">
-      <header class="topbar">
-        <button class="btn ghost icon menu-btn" id="menuBtn" aria-label="Menu"><span data-icone="menu"></span></button>
-        <div class="crumbs" id="crumbs"></div>
-        <div class="top-actions">
-          <button class="sync-pill" id="syncPill" title="Synchronisation en ligne"><span class="dot"></span><span class="lbl">Local</span></button>
-          <button class="btn ghost icon" id="themeBtn" aria-label="Changer de thème" title="Thème clair / sombre"><span data-icone="moon"></span></button>
-        </div>
-      </header>
-      <main class="content" id="view"></main>
-    </div>
-
-    <nav class="bottom-nav" id="bottomNav" aria-label="Navigation rapide"></nav>
+      <nav class="espaces" id="espaces" aria-label="Espaces"></nav>
+      <div class="top-actions">
+        <button class="btn ghost icon" id="searchBtn" aria-label="Rechercher (Ctrl+K)" title="Rechercher et aller vite (Ctrl+K)"><span data-icone="search"></span></button>
+        <button class="btn primary icon creer-btn" data-act="creer" aria-label="Créer" title="Créer : pointage, photo, action, réserve…"><span data-icone="plus"></span></button>
+        <button class="sync-pill" id="syncPill" title="Synchronisation en ligne"><span class="dot"></span><span class="lbl">Local</span></button>
+        <button class="btn ghost icon" id="themeBtn" aria-label="Changer de thème" title="Thème clair / sombre"><span data-icone="moon"></span></button>
+        <button class="avatar-btn" id="userBtn" aria-label="Mon compte"><span class="avatar">?</span></button>
+      </div>
+    </header>
+    <nav class="subnav" id="subnav" aria-label="Pages de l'espace"></nav>
+    <main class="content" id="view"></main>
+    <nav class="bottom-nav" id="bottomNav" aria-label="Navigation"></nav>
   </div>
+  <input type="file" id="phGalerieInput" accept="image/*" multiple hidden data-change="photosGalerie">
 
   <div id="modalRoot"></div>
   <div id="popRoot"></div>
@@ -71,6 +62,20 @@
   <script src="js/app.js"></script>
   <script src="js/finances.js"></script>
   <script src="js/pointage.js"></script>
+  <script src="js/planning.js"></script>
+  <script src="js/coordination.js"></script>
+  <script src="js/securite.js"></script>
+  <script src="js/photos.js"></script>
+  <script src="js/cockpit.js"></script>
+  <script src="js/signature.js"></script>
+  <script src="js/pv.js"></script>
+  <script src="js/rapports.js"></script>
+  <script src="js/agenda.js"></script>
+  <script src="js/charge.js"></script>
+  <script src="js/devis.js"></script>
+  <script src="js/preparation.js"></script>
+  <script src="js/bilan.js"></script>
+  <script src="js/navigation.js"></script>
   <script src="js/donnees.js"></script>
   <script src="js/demarrage.js"></script>
 </body>

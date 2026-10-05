@@ -198,5 +198,104 @@ const REFERENTIEL = {
     "Assister aux réunions de lancement des chantiers à venir"
   ],
 
+  // Sécurité : thèmes de quart d'heure sécurité (causeries)
+  themesSecurite: [
+    "Travail en hauteur : garde-corps, harnais, lignes de vie",
+    "Travaux par point chaud : chalumeau, permis de feu, extincteur",
+    "Bouteilles de gaz : stockage, transport, détendeurs, flexibles",
+    "Manutention manuelle et port de charges (rouleaux, isolant)",
+    "Levage : grue, monte-matériaux, élingage, zone balisée",
+    "Équipements de protection individuelle (EPI)",
+    "Chutes de plain-pied : ordre, propreté, circulation",
+    "Coactivité et interfaces avec les autres entreprises",
+    "Intempéries : vent, chaleur, froid, surfaces glissantes",
+    "Produits dangereux : primaires, colles, solvants (FDS)",
+    "Risque électrique et outillage portatif",
+    "Accès en toiture : échafaudage, échelle, trémies et lanterneaux",
+    "Conduite à tenir en cas d'accident, alerte des secours",
+    "Addictions, fatigue et vigilance"
+  ],
+  // Accueil sécurité d'un nouvel arrivant sur le chantier
+  accueilSecurite: [
+    "Présentation du chantier, des intervenants et du chef de chantier",
+    "Consignes du PPSPS et du plan de prévention",
+    "Zones à risques, accès, circulations et stockages",
+    "EPI obligatoires remis et vérifiés (casque, harnais, chaussures, gants, lunettes)",
+    "Protections collectives : garde-corps, lignes de vie, trémies",
+    "Travaux par point chaud : permis de feu et extincteurs",
+    "Conduite à tenir en cas d'accident, trousse de secours, numéros d'urgence",
+    "Sauveteurs secouristes du travail présents sur le chantier",
+    "Installations d'hygiène (base vie, sanitaires, eau)",
+    "Habilitations et autorisations vérifiées (CACES, travail en hauteur)"
+  ],
+  // Visite sécurité : points de contrôle (conforme / non conforme / sans objet)
+  visiteSecurite: [
+    "Port des EPI par tous les compagnons",
+    "Protections collectives en place (garde-corps, filets, lignes de vie)",
+    "Trémies, lanterneaux et ouvertures protégés",
+    "Accès en toiture sécurisé (échafaudage, escalier, échelle fixée)",
+    "Extincteur à moins de 10 m du poste de chalumeau",
+    "Bouteilles de gaz arrimées, debout, à l'abri du soleil",
+    "Permis de feu établi et surveillance après travaux",
+    "Zone de levage balisée, élingues en bon état",
+    "Ordre et propreté, évacuation des déchets",
+    "Stockage des matériaux stable et lesté (vent)",
+    "Affichage obligatoire et numéros d'urgence",
+    "Trousse de secours complète et accessible"
+  ],
+  // Permis de feu : mesures préalables
+  permisFeu: [
+    "Zone de travail reconnue, matériaux combustibles éloignés ou protégés",
+    "Extincteur(s) adapté(s) à proximité immédiate",
+    "Flexibles, détendeurs et chalumeaux contrôlés",
+    "Bouteilles debout, arrimées, robinet fermé à chaque arrêt",
+    "Isolants et pare-vapeur combustibles protégés de la flamme",
+    "Exploitant / occupant informé (détection incendie neutralisée si nécessaire)"
+  ],
+  typesEvenement: ["Accident avec arrêt", "Accident sans arrêt", "Presqu'accident", "Situation dangereuse", "Premiers soins"],
+
+  // Préparation de chantier : de la passation commerce → travaux à l'ouverture
+  preparation: [
+    { section: "Passation et lancement", items: [
+      "Passation commerce → travaux : marché, devis, BTE vendu, hypothèses de chiffrage",
+      "Réunion de lancement interne (chef de chantier, chargé d'affaires, bureau d'études)",
+      "Visite préalable du site (accès, supports, existants, contraintes)",
+      "Réunion de démarrage avec le maître d'œuvre / OPC"
+    ]},
+    { section: "Sécurité et autorisations", items: [
+      "PPSPS rédigé et transmis au CSPS",
+      "Inspection commune / plan de prévention (site occupé)",
+      "DICT / DT déposées si nécessaire",
+      "Autorisation d'occupation du domaine public / voirie",
+      "Plan d'installation de chantier (base vie, stockage, levage, accès)",
+      "Déclaration d'ouverture de chantier et affichage réglementaire"
+    ]},
+    { section: "Études et documents", items: [
+      "Plans d'exécution et carnet de détails établis",
+      "Visa du bureau de contrôle sur les plans et notes",
+      "Avis techniques et fiches techniques transmis au maître d'œuvre",
+      "Échantillons et coloris validés",
+      "Planning d'exécution établi et validé"
+    ]},
+    { section: "Moyens et approvisionnements", items: [
+      "Équipe affectée (plan de charge)",
+      "Moyens de levage réservés (grue, monte-matériaux)",
+      "Échafaudages et protections collectives commandés",
+      "Commandes des matériaux à délai long passées",
+      "Bennes, sanitaires et base vie organisés"
+    ]}
+  ],
+  typesDocuments: ["Plan d'exécution", "Carnet de détails", "Note de calcul", "Fiche technique", "Avis technique", "PV d'essai", "Échantillon", "Notice d'entretien", "Garantie / attestation", "Autre"],
+  // Clôture du chantier (bilan)
+  cloture: [
+    "Réserves levées et PV de levée signé",
+    "DOE transmis au maître d'œuvre",
+    "Décompte général définitif (DGD) établi",
+    "Matériel et installations repliés",
+    "Bilan financier validé avec la direction",
+    "Retour d'expérience partagé avec l'équipe",
+    "Dossier archivé"
+  ],
+
   meteo: ["Beau", "Nuageux", "Pluie", "Vent fort", "Gel", "Neige", "Orage", "Canicule"]
 };

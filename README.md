@@ -6,7 +6,10 @@ Excellence Opérationnelle SMAC : BTE standard, cadences cibles, suivi hebdomada
 Elle fonctionne **hors-ligne** sur smartphone, tablette ou PC, sans serveur ni compte.
 
 ## Interface
-Navigation latérale (pilotage, terrain, organisation), sélecteur de chantier avec recherche, navigation basse sur mobile,
+Pas de longue liste de menus : cinq **espaces** dans la barre du haut (Accueil, Chantier, Terrain, Coordination, Gestion).
+Chaque espace s'ouvre sur une page de **tuiles interactives** (chiffre clé, état, action rapide) et propose ses pages en onglets.
+Bouton **+** de création rapide (pointage, photo, action, réserve, quart d'heure sécurité, compte rendu…), **recherche** de tout
+(pages, chantiers, actions, intervenants, compagnons) avec Ctrl+K, sélecteur de chantier, barre du bas sur mobile,
 thème clair / sombre, graphiques interactifs (courbe d'avancement réel vs prévu, écarts d'heures par phase), vue portefeuille
 multi-chantiers et rapport PDF mis en page. Palette des graphiques validée pour les daltoniens ; l'identité des séries n'est
 jamais portée par la couleur seule (légende, pointillés, étiquettes directes).
@@ -15,15 +18,29 @@ jamais portée par la couleur seule (légende, pointillés, étiquettes directes
 
 | Onglet | Contenu |
 |---|---|
+| 🏠 **Ma journée** | Page d'accueil du conducteur de travaux, tous chantiers confondus : actions en retard et à échéance (saisie rapide), agenda des 7 prochains jours (réunions, jalons, livraisons, démarrages de phases, levées de réserves), points d'attention de tous les chantiers classés par gravité, tableau des chantiers (avancement, impact projeté, délai, actions, réserves, dernier pointage). |
+| 👷 **Plan de charge** | Qui est où dans les 6 semaines à venir, tous chantiers confondus : affectation de chaque compagnon (chantier, congés, formation, arrêt), besoin en compagnons calculé depuis le planning (heures restantes ÷ jours ouvrés), sous-effectifs signalés, reprise de la semaine précédente. |
 | 📊 **Tableau de bord** | Courbe d'avancement réel vs prévu, écarts par phase, activité récente, avancement pondéré, heures budgétées / pointées, écart d'heures à date et projeté (h et €), indice de productivité, avancement terrain, réserves, intempéries, alertes automatiques (dérives, réserves en retard, semaine non saisie). |
 | 🕒 **Pointage journalier** | Équipe du chantier (chef, compagnons, intérimaires), pointage de chaque compagnon chaque jour : statut (présent, intempéries, congés, maladie, formation, absent), heures **ventilées par phase du BTE** (plusieurs phases possibles), heures d'intempéries, panier. « Tous présents » et « Reprendre la veille » en un geste. Budget d'heures par phase (pointé / budget / % réalisé / reste). Relevé d'heures hebdomadaire PDF à signer, export Excel. Les heures pointées **alimentent automatiquement le suivi hebdo**, les écarts et la main d'œuvre réelle. |
 | ✅ **Terrain** | Saisie par zone (terrasse, façade, support, niveau…) : cochage des tâches horodaté avec le nom de l'opérateur, observations, « tout cocher », travaux non prévus, vue **matrice** zones × tâches, scan de **QR code** et étiquettes QR imprimables, récap du jour à copier dans WhatsApp / mail. |
+| 📋 **Préparation** | De la passation commerce → travaux à l'ouverture : 20 étapes (lancement, PPSPS, DICT, voirie, installation, plans et visas, échantillons, levage, approvisionnements) avec statut, échéance, responsable, note et création d'action. |
+| 🏁 **Bilan** | Écarts finaux d'heures, de marge et de délai, productivité et cadence équivalente par phase, réserves, sécurité, intempéries, date de libération de la retenue de garantie, retour d'expérience, check-list de clôture, dossier de clôture PDF. |
+| 🗓️ **Planning** | Gantt par phase du BTE : planning généré automatiquement (heures ÷ effectif, jours ouvrés, phases successives ou chevauchées) puis ajustable, avancement réel du suivi, activité réelle du pointage, **fin projetée au rythme constaté** et glissement en jours, fin contractuelle, jalons, planning PDF. |
 | 📈 **Suivi hebdo** | Saisie hebdomadaire du % cumulé par ouvrage / phase ; heures reprises du pointage journalier, avec une colonne d'ajout manuel (ou saisie des heures à la semaine sans pointage), avec les mêmes formules que l'onglet « Étape 2 - Objectifs et suivi » du BTE SMAC. Le % peut être calculé à partir des quantités. Historique des semaines. |
 | 🧮 **BTE** | Opérations par complexe / ouvrage et phase : métré, cadence (u/j/homme), heures, budget MO, devis, écarts. Bibliothèque des **cadences standard** (simulateurs Étanchéité V10 et Façades V8) avec coefficient chantier. Durée indicative selon la taille de l'équipe. |
-| 📒 **Journal** | Effectif, météo, heures, travaux et événements. Déclaration d'**intempérie** avec la liste des bonnes pratiques à vérifier avant de s'arrêter. |
+| 📒 **Journal & photos** | Effectif, météo, heures, travaux et événements ; **photos** prises depuis le téléphone (compressées, disponibles hors-ligne, partagées avec l'équipe), rattachées aux entrées de journal et aux réserves, galerie par jour. Déclaration d'**intempérie** avec la liste des bonnes pratiques à vérifier avant de s'arrêter. |
 | 🛡️ **Qualité** | Réserves / OPR (origine, responsable, échéance, levée), **check-list CDT** (20 points, 6 temps forts) et contrôle qualité de fin de chantier. |
+| 🦺 **Sécurité** | Quarts d'heure sécurité avec **feuille d'émargement PDF signée à l'écran**, accueils sécurité des nouveaux arrivants, visites sécurité (non-conformités → actions correctives), **permis de feu** avec surveillance 2 h après travaux, registre des accidents et presqu'accidents, jours sans accident. |
+| ✅ **Plan d'actions** | Toutes les actions du chantier (réunions, sécurité, relances) avec responsable, échéance, retard ; saisie rapide. |
+| 📄 **Rapport mensuel** | PDF d'avancement pour le maître d'œuvre : chiffres clés, avancement du mois par phase, Gantt et délai, effectifs pointés, intempéries, faits marquants du journal, sécurité, qualité, facturation, points en attente, photos du mois, commentaire du conducteur. |
+| ✍️ **Signatures et PV** | Signature au doigt ou au stylet : émargement des quarts d'heure, accueils sécurité, permis de feu ; **PV de réception** (sans / avec réserves / différée, délai de levée) et **PV de levée des réserves** signés par le maître d'ouvrage, le maître d'œuvre et l'entreprise, en PDF. |
+| 📅 **Agenda et rappels** | Ajout à l'agenda du téléphone (fichier .ics) des réunions, échéances d'actions, jalons, livraisons et démarrages de phases, avec rappels intégrés ; notifications sur l'appareil (actions échues, réunion du jour, permis de feu à surveiller, pointage manquant le soir). |
+| 🤝 **Réunions & CR** | Compte rendu de réunion pré-rempli (participants, sujets du CR précédent, avancement, planning, réserves), actions décidées, suivi des actions en cours, prochaine réunion ; **PDF diffusé** par partage ou e-mail aux participants. |
+| 📁 **Documents** | Registre des plans d'exécution, carnets de détails, fiches et avis techniques, PV d'essai : référence, indice, diffusion, visa (avec ou sans observations, refusé), nouvel indice, lien vers le fichier, pièces du DOE et bordereau PDF ; alerte au-delà de 15 jours sans visa. |
+| 📇 **Annuaire** | Intervenants du chantier par rôle (MOA, MOE, bureau de contrôle, CSPS, entreprises, fournisseurs) : appel et e-mail en un geste, convocation aux réunions. |
 | 💶 **Synthèse financière** | Chiffre d'affaires (marché + avenants), facturé et encaissé, déboursé par poste (main d'œuvre, matériaux, sous-traitance, matériel, divers) : budget BTE / réel ou engagé / fin d'affaire, marge prévue vs marge fin d'affaire, courbe facturation vs dépenses, alerte de retard de facturation. |
 | 🧾 **Situations mensuelles** | Décomposition du marché (DPGF, import CSV / Excel) et avenants ; situation de travaux mensuelle par poste (% cumulé, montant du mois, retenue de garantie, compte prorata, TVA), circuit brouillon → transmise MOE → validée → facturée → payée, PDF à transmettre au maître d'œuvre. |
+| 🧾 **Devis & relances** | Devis de travaux supplémentaires (lignes, PDF « bon pour accord »), émis → accepté (avenant créé automatiquement) ou refusé, relance après 15 jours sans réponse ; impayés des situations après l'échéance de paiement (délai réglable), relance par e-mail et lettre de relance PDF. |
 | 🛒 **Commandes & achats** | Commandes fournisseurs avec lignes (catalogue matériaux importé du BTE), statut jusqu'à la livraison et la facture, retards de livraison, engagé vs budget achats, bon de commande PDF. |
 | 💼 **Portefeuille** | Tous les chantiers avec avancement, écarts, impact projeté et réserves ; totaux consolidés. |
 | ⚙️ **Paramètres** | Fiche chantier, synchronisation en ligne (équipes, partage), imports, exports Excel / PDF, sauvegarde et restauration JSON, démo. |
@@ -40,6 +57,8 @@ jamais portée par la couleur seule (légende, pointillés, étiquettes directes
 - Écart projeté = écart d'heures ÷ % réalisé (le total est calculé comme écart total ÷ avancement global)
 
 - Heures pointées d'une semaine et d'une phase = somme des pointages journaliers (compagnons présents) + heures saisies manuellement dans le suivi ; les heures non ventilées ou hors BTE comptent dans la main d'œuvre réelle, pas dans l'avancement
+
+- Planning : durée d'une phase = heures budgétées ÷ (effectif × heures par jour), en jours ouvrés ; une phase est en retard si son % réalisé est inférieur de plus de 10 points au % attendu à date (linéaire entre ses dates) ou si sa fin est dépassée ; fin projetée = début réel + jours écoulés ÷ % réalisé
 
 Contrôlé sur le cas pratique CIGV : 133,5 h budgétées, +1,86 h / +55,75 € à date, +4,36 h / +130,90 € projetés.
 
@@ -64,6 +83,7 @@ La **synchronisation en ligne** (onglet ⚙️ Chantiers & données → ☁️ S
 
 Les chantiers non partagés restent uniquement sur l'appareil. Hébergement : projet Supabase (base PostgreSQL), accès protégé par des règles RLS
 (un utilisateur ne voit que les équipes dont il est membre). Schéma : `supabase/migrations/`.
+Les photos sont conservées dans IndexedDB sur l'appareil ; celles des chantiers partagés sont déposées dans le stockage privé `omsmk-photos` (un dossier par équipe, accessible aux seuls membres).
 
 ### Réglages Supabase à faire une fois (tableau de bord Supabase)
 - **Authentication → URL Configuration** : *Site URL* = l'adresse publique de l'application (ex. `https://mcxsimm.github.io/OmSmK/`), à ajouter aussi dans *Redirect URLs*.
@@ -90,6 +110,20 @@ js/graphiques.js      Graphiques SVG (courbe d'avancement, écarts par phase)
 js/app.js             État, vues et actions
 js/finances.js        Synthèse financière, situations mensuelles, commandes
 js/pointage.js        Pointage journalier des compagnons, budget d'heures, relevé hebdomadaire
+js/planning.js        Planning d'exécution (Gantt), jalons, planning PDF
+js/coordination.js    Annuaire, plan d'actions, réunions et comptes rendus PDF
+js/securite.js        Quarts d'heure sécurité, accueils, visites, permis de feu, accidents
+js/photos.js          Photos (IndexedDB hors-ligne + stockage Supabase de l'équipe)
+js/cockpit.js         « Ma journée » : actions, agenda et alertes de tous les chantiers
+js/navigation.js      Espaces et tuiles, menu, création rapide, recherche (Ctrl+K)
+js/signature.js       Signature à l'écran (doigt, stylet, souris) et insertion dans les PDF
+js/pv.js              PV de réception et de levée des réserves
+js/rapports.js        Rapport mensuel d'avancement pour le maître d'œuvre
+js/agenda.js          Agenda du téléphone (.ics) et notifications de rappel
+js/charge.js          Plan de charge des équipes (tous chantiers)
+js/devis.js           Devis de travaux supplémentaires, relances de devis et d'impayés
+js/preparation.js     Préparation de chantier et registre des documents (visas, DOE)
+js/bilan.js           Bilan de fin de chantier, retour d'expérience, dossier de clôture
 js/donnees.js         Imports, exports Excel, rapport PDF, situation, bon de commande et relevé d'heures PDF, QR codes
 js/demarrage.js       Événements et démarrage
 js/icones.js          Icônes Lucide (sous-ensemble)

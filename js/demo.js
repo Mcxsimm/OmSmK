@@ -134,5 +134,97 @@ function construireDemo(lundiCourant) {
       lignes: [{ designation: 'Grue mobile avec opérateur', quantite: 1, unite: 'jour', pu: 480 }] }
   ];
 
-  return { chantier, ops, suivi, taches, journal, reserves, checklists, postes, situations, commandes, compagnons, pointages };
+  // Planning (jours ouvrés) et jalons
+  const T = 'Toiture A||';
+  chantier.planning = {
+    [T + 'Installation / Appro']: { debut: s1, fin: s1 },
+    [T + 'Pare-vapeur']: { debut: s1, fin: addDays(s1, 2) },
+    [T + "Hors d'eau"]: { debut: addDays(s1, 1), fin: addDays(s2, 1) },
+    [T + '2nd couche et relevés']: { debut: addDays(s2, 2), fin: addDays(s2, 7) },
+    [T + 'Finitions']: { debut: addDays(s2, 8), fin: addDays(s2, 11) }
+  };
+  chantier.jalons = [
+    { id: id(), libelle: 'Démarrage des travaux', date: s1, fait: true },
+    { id: id(), libelle: 'Mise hors d\'eau', date: addDays(s2, 1), fait: true },
+    { id: id(), libelle: 'OPR', date: addDays(s1, 30), fait: false },
+    { id: id(), libelle: 'Réception', date: addDays(s1, 34), fait: false }
+  ];
+
+  // Annuaire du chantier (coordonnées fictives)
+  const ct = (role, societe, nom, fonction, n) => ({ id: id(), chantierId: cid, role, societe, nom, fonction, tel: `02 35 00 00 ${String(n).padStart(2, '0')}`, email: `${nom.split(' ').pop().toLowerCase()}@exemple.fr`, notes: '' });
+  const contacts = [
+    ct('Maître d\'ouvrage', 'CIGV', 'Claire Durand', 'Chargée d\'opération', 11),
+    ct('Maître d\'œuvre', 'Atelier d\'architecture Seine', 'Paul Lefèvre', 'Architecte', 12),
+    ct('Bureau de contrôle', 'Contrôle Technique Ouest', 'Inès Martin', 'Contrôleur technique', 13),
+    ct('CSPS', 'Coordination SPS Normandie', 'Julien Roux', 'Coordonnateur SPS', 14),
+    ct('Entreprise générale', 'Bâtir Normandie', 'Sophie Leroy', 'Conductrice de travaux GO', 15),
+    ct('Fournisseur', 'Négoce Étanchéité Ouest', 'Thomas Girard', 'Commercial', 16)
+  ];
+  const part = (k, statut) => ({ contactId: k.id, nom: k.nom, societe: k.societe, role: k.role, email: k.email, statut });
+
+  // Réunion de chantier n° 1 et plan d'actions
+  const reu1 = id();
+  const reunions = [{
+    id: reu1, chantierId: cid, numero: 1, type: 'Réunion de chantier', date: addDays(s1, 3), heure: '09:00', lieu: 'Base vie — bâtiment A', redacteur: 'Marc',
+    participants: [{ nom: 'Marc', societe: 'SMAC', role: 'Conducteur de travaux', statut: 'present' }, part(contacts[0], 'present'), part(contacts[1], 'present'), part(contacts[4], 'present'), part(contacts[3], 'excuse'), part(contacts[2], 'diffusion')],
+    points: [
+      { id: id(), titre: 'Effectifs et avancement', texte: 'Équipe SMAC : 1 chef d\'équipe + 1 compagnon. Installation terminée, pare-vapeur à 75 %, isolant démarré sur terrasses 1 et 2.' },
+      { id: id(), titre: 'Planning', texte: 'Arrêt intempéries mercredi (pluie continue). Mise hors d\'eau maintenue en fin de semaine prochaine.' },
+      { id: id(), titre: 'Sécurité', texte: 'Garde-corps périphériques en place. Rappel : permis de feu quotidien et surveillance 2 h après l\'arrêt du chalumeau.' },
+      { id: id(), titre: 'Interfaces avec les autres corps d\'état', texte: 'Acrotère nord : reprise béton à prévoir par le GO avant les relevés. Zone de stockage terrasse 3 à libérer.' }
+    ],
+    prochaine: { date: addDays(s2, 3), heure: '09:00' }, observations: '', diffuseLe: addDays(s1, 3)
+  }];
+  const act = (libelle, responsable, echeance, statut, origine, faiteLe) => ({ id: id(), chantierId: cid, libelle, responsable, echeance, statut, origine, creeLe: addDays(s1, 3), creePar: 'Marc', faiteLe: faiteLe || '' });
+  const o1 = { type: 'reunion', id: reu1 };
+  const visite = id();
+  const actions = [
+    act('Transmettre les détails d\'acrotère révisés', 'Atelier d\'architecture Seine (Paul Lefèvre)', addDays(s2, 1), 'ouverte', o1),
+    act('Reprendre le béton de l\'acrotère nord avant relevés', 'Bâtir Normandie (Sophie Leroy)', addDays(s2, 4), 'ouverte', o1),
+    act('Libérer la zone de stockage terrasse 3', 'Bâtir Normandie (Sophie Leroy)', addDays(s1, 7), 'faite', o1, addDays(s2, 0)),
+    act('Valider l\'échantillon de couvertine (RAL 7016)', 'CIGV (Claire Durand)', addDays(s2, 9), 'ouverte', o1),
+    act('Sécurité — Extincteur à moins de 10 m du poste de chalumeau', 'Karim Benali', addDays(s1, 5), 'faite', { type: 'securite', id: visite }, addDays(s1, 4)),
+    act('Commander les crapaudines du TS 01', 'Marc', addDays(s2, 2), 'ouverte', { type: 'manuel' })
+  ];
+
+  // Registre sécurité
+  const items = n => Object.fromEntries(Array.from({ length: n }, (_, i) => [i, true]));
+  const securite = [
+    { id: id(), chantierId: cid, type: 'accueil', date: s1, compagnonId: K, animateur: 'Marc', items: items(10), par: 'Démo' },
+    { id: id(), chantierId: cid, type: 'accueil', date: s1, compagnonId: L, animateur: 'Marc', items: items(10), par: 'Démo' },
+    { id: id(), chantierId: cid, type: 'causerie', date: s1, theme: 'Travaux par point chaud : chalumeau, permis de feu, extincteur', animateur: 'Marc', participants: [K, L], externes: '', notes: 'Rappel des distances de sécurité, contrôle des flexibles, surveillance après travaux.', par: 'Démo' },
+    { id: visite, chantierId: cid, type: 'visite', date: addDays(s1, 3), auteur: 'Marc', items: Object.assign(Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i, 'c'])), { 4: 'nc' }), notes: 'Extincteur resté au pied du monte-matériaux.', par: 'Démo' },
+    { id: id(), chantierId: cid, type: 'permis', date: s2, zone: 'Terrasses 01 et 02 — relevés', debut: '08:00', fin: '15:30', travaux: 'Soudure de membranes bitumineuses au chalumeau', intervenants: [K, L], mesures: items(6), surveillance: { fait: true, heure: '17:35', par: 'Karim Benali' }, par: 'Démo' }
+  ];
+
+  // Plan de charge : semaine courante et suivante sur le chantier, congés de Lucas dans deux semaines
+  const cleP = k => `${k.prenom} ${k.nom}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const fnv = t => { let h = 0x811c9dc5; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
+  const aff = (k, sem, statut) => ({ id: `af|${fnv(cleP(k))}|${sem}`, personne: cleP(k), nom: `${k.prenom} ${k.nom}`, semaine: sem, statut, chantierId: cid, par: 'Démo' });
+  const affectations = [aff(compagnons[0], s2, 'chantier'), aff(compagnons[1], s2, 'chantier'), aff(compagnons[0], addDays(s2, 7), 'chantier'), aff(compagnons[1], addDays(s2, 7), 'chantier'), aff(compagnons[0], addDays(s2, 14), 'chantier'), aff(compagnons[1], addDays(s2, 14), 'conge')];
+
+  // Devis de travaux supplémentaires : TS 01 accepté (avenant), TS 02 en attente depuis trois semaines
+  const ts01 = postes.find(p => p.avenant);
+  const devis = [
+    { id: id(), chantierId: cid, numero: 'TS 01', objet: ts01.designation, demandePar: 'MOE — CR n° 1', dateEmission: addDays(s1, 1), statut: 'accepte', dateAcceptation: addDays(s1, 4), posteId: ts01.id, relances: [], lignes: [{ designation: 'Crapaudine fonte Ø100', quantite: 4, unite: 'U', pu: 65 }, { designation: 'Trop-plein acier galvanisé', quantite: 2, unite: 'U', pu: 110 }], creeLe: addDays(s1, 1), par: 'Marc' },
+    { id: id(), chantierId: cid, numero: 'TS 02', objet: 'Reprise d\'étanchéité de l\'acrotère nord après ragréage', demandePar: 'MOA', dateEmission: addDays(s2, -20), statut: 'emis', relances: [], lignes: [{ designation: 'Dépose et repose de relevé', quantite: 18, unite: 'mL', pu: 38 }, { designation: 'Équerre de renfort', quantite: 18, unite: 'mL', pu: 12.5 }], notes: 'Validité de l\'offre : 30 jours.', creeLe: addDays(s2, -20), par: 'Marc' }
+  ];
+
+  // Registre des documents
+  const doc_ = (reference, type, titre, indice, statut, diffuseLe, doe, visa) => ({ id: id(), chantierId: cid, reference, type, titre, indice, statut, diffuseLe, diffusion: 'MOE, bureau de contrôle', emetteur: 'SMAC', doe, visa: visa || null, creeLe: diffuseLe || s1, par: 'Marc' });
+  const documents = [
+    doc_('EXE-ETA-001', 'Carnet de détails', 'Carnet de détails — toiture A', 'A', 'vise_obs', addDays(s1, -30), false, { date: addDays(s1, -20), par: 'Bureau de contrôle', avis: 'Préciser la hauteur des relevés en acrotère' }),
+    doc_('EXE-ETA-001', 'Carnet de détails', 'Carnet de détails — toiture A', 'B', 'vise', addDays(s1, -15), true, { date: addDays(s1, -8), par: 'Bureau de contrôle', avis: '' }),
+    doc_('EXE-ETA-002', 'Plan d\'exécution', 'Plan de calepinage de l\'isolant', 'A', 'diffuse', addDays(s2, -18), true),
+    doc_('FT-001', 'Fiche technique', 'Hyrène 25/25 TS — fiche technique', '1', 'vise', addDays(s1, -25), true, { date: addDays(s1, -21), par: 'MOE', avis: '' }),
+    doc_('AT-001', 'Avis technique', 'Avis technique du procédé bicouche', '1', 'vise', addDays(s1, -25), true, { date: addDays(s1, -21), par: 'Bureau de contrôle', avis: '' })
+  ];
+
+  // Préparation de chantier
+  const fait = (j) => ({ statut: 'fait', date: addDays(s1, j), par: 'Marc' });
+  checklists[cid].prep = { '0-0': fait(-30), '0-1': fait(-28), '0-2': fait(-25), '0-3': fait(-14), '1-0': fait(-20), '1-1': { statut: 'so' }, '1-2': { statut: 'so' }, '1-3': fait(-10), '1-4': fait(-12), '1-5': fait(-2),
+    '2-0': fait(-15), '2-1': { statut: 'encours', echeance: addDays(s2, -3), responsable: 'Marc', note: 'Plan de calepinage EXE-ETA-002 en attente' }, '2-2': fait(-21), '2-3': { statut: 'encours', echeance: addDays(s2, 9), responsable: 'CIGV (Claire Durand)', note: 'Couvertine RAL 7016' }, '2-4': fait(-7),
+    '3-0': fait(-7), '3-1': fait(-9), '3-2': fait(-9), '3-3': fait(-10), '3-4': fait(-3) };
+
+  return { chantier, ops, suivi, taches, journal, reserves, checklists, postes, situations, commandes, compagnons, pointages, contacts, reunions, actions, securite, affectations, devis, documents };
 }

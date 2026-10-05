@@ -1,8 +1,8 @@
 /* Service worker OmSmK : application utilisable hors-ligne sur chantier */
-const CACHE = 'omsmk-v9';
+const CACHE = 'omsmk-v10';
 const SHELL = [
   './', './index.html', './manifest.json', './css/app.css',
-  './js/config.js', './js/icones.js', './js/referentiel.js', './js/calculs.js', './js/synchro.js', './js/demo.js',
+  './js/config.js', './js/icones.js', './js/referentiel.js', './js/calculs.js', './js/synchro.js', './js/drive.js', './js/demo.js',
   './js/ui.js', './js/graphiques.js', './js/app.js', './js/finances.js', './js/pointage.js', './js/planning.js', './js/coordination.js', './js/securite.js', './js/photos.js', './js/cockpit.js', './js/signature.js', './js/pv.js', './js/rapports.js', './js/agenda.js', './js/charge.js', './js/devis.js', './js/raf.js', './js/preparation.js', './js/bilan.js', './js/navigation.js', './js/donnees.js', './js/demarrage.js',
   './icons/icon-192.png', './icons/icon-512.png',
   './vendor/fonts/inter-latin-wght-normal.woff2', './vendor/fonts/inter-latin-ext-wght-normal.woff2',

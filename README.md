@@ -76,7 +76,22 @@ Contrôlé sur le cas pratique CIGV : 133,5 h budgétées, +1,86 h / +55,75 € 
 - Les QR codes de zone contiennent l'URL de l'application avec `?c=<chantier>&z=<zone>` : le scan ouvre directement la saisie de la zone.
 
 ## Données et synchronisation en ligne
-Les données sont d'abord stockées **sur l'appareil** (localStorage) : l'application fonctionne sans réseau.
+Les données sont d'abord stockées **sur l'appareil** (IndexedDB, sans la limite de 5 Mo de localStorage) : l'application fonctionne sans réseau.
+
+### Stockage sur Google Drive (usage personnel)
+Paramètres → **Google Drive** : une fois connecté, tout est enregistré dans le dossier **OmSmK** du Drive (`omsmk_donnees.json`), avec une **copie datée par jour** conservée 30 jours dans `OmSmK/Sauvegardes` (retour possible à une copie depuis l'application).
+Le PC et le téléphone connectés au même compte retrouvent les mêmes données : chaque objet (chantier, pointage, commande…) est comparé à son état lors de la dernière synchronisation ; ce qui n'a changé que d'un côté est repris, et en cas de modification du même objet des deux côtés, la version de l'appareil est conservée (conflit signalé).
+OmSmK n'utilise que l'autorisation `drive.file` : il ne voit que les fichiers qu'il a créés.
+
+Réglage à faire une fois (console Google Cloud, gratuit) :
+1. créer un projet, activer **Google Drive API** ;
+2. écran de consentement OAuth : type *Externe*, ajouter son adresse Gmail dans *Utilisateurs test* ;
+3. créer un **ID client OAuth** de type *Application Web*, origine JavaScript autorisée = l'adresse de l'application (ex. `https://mcxsimm.github.io`) ;
+4. coller l'ID client dans Paramètres → Google Drive (ou dans `js/config.js`, champ `googleClientId`).
+
+La session Google dure une heure : au-delà, la pastille affiche « Reconnecter Drive » et un clic suffit ; les saisies faites entre-temps restent sur l'appareil et partent à la reconnexion.
+
+### Travail en équipe (Supabase)
 
 La **synchronisation en ligne** (onglet ⚙️ Chantiers & données → ☁️ Synchronisation en ligne) permet de travailler à plusieurs :
 1. chaque personne se connecte avec son **adresse e-mail** (lien ou code reçu par e-mail, sans mot de passe) ;
@@ -107,6 +122,7 @@ css/app.css           Styles
 js/referentiel.js     Référentiel métier : phases, opérations, cadences, check-lists, intempéries
 js/calculs.js         Calculs métier purs (BTE, suivi, terrain, CSV)
 js/synchro.js         Synchronisation en ligne (Supabase)
+js/drive.js           Stockage local IndexedDB et enregistrement sur Google Drive (fusion PC / téléphone, copies datées)
 js/config.js          Adresse et clé publique du projet Supabase
 js/ui.js              Briques d'interface : formats, icônes, notifications, boîtes de dialogue
 js/graphiques.js      Graphiques SVG (courbe d'avancement, écarts par phase)

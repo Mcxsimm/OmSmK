@@ -19,15 +19,19 @@ let db = chargerDB();
 let user = lireJSON(USER_KEY, null);
 const ui = Object.assign({
   view: 'journee', chantierId: null, zone: null, terrainMode: 'liste', filtreTache: '',
-  qualiteTab: 'reserves', reserveFiltre: 'ouvertes', semaine: null, equipe: 2, paramTab: 'equipe', ptMode: 'jour'
+  qualiteTab: 'reserves', reserveFiltre: 'ouvertes', semaine: null, equipe: 2, paramTab: 'drive', ptMode: 'jour'
 }, lireJSON(UI_KEY, {}));
 if (!ui.semaine) ui.semaine = lundi(aujourdHui());
 if (ui.view === 'chantiers') ui.view = 'portefeuille';
 
-function save() { enregistrerLocal(); Synchro.planifier(); }
+function save() { enregistrerLocal(); Synchro.planifier(); Drive.planifier(); }
+/* Enregistrement sur l'appareil : IndexedDB (sans limite pratique de taille) ;
+   localStorage en plus tant que la base y tient (lecture immédiate au démarrage). */
 function enregistrerLocal() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(db)); }
-  catch (_e) { toast('Stockage local plein : exportez une sauvegarde puis faites du ménage.', 'erreur'); }
+  const json = JSON.stringify(db), le = Date.now();
+  StockLocal.ecrire('db', { le, json }).catch(e => { console.error(e); toast('Enregistrement sur l\'appareil impossible : exportez une sauvegarde.', 'erreur'); });
+  try { localStorage.setItem(STORE_KEY, json); localStorage.setItem(STORE_KEY + '_le', String(le)); }
+  catch (_e) { try { localStorage.removeItem(STORE_KEY); localStorage.setItem(STORE_KEY + '_le', '0'); } catch (_e2) { /* ignoré */ } }
 }
 function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch (_e) { /* ignoré */ } }
 
@@ -122,6 +126,12 @@ function renderSyncPill() {
     else if (Synchro.etat === 'encours') { etat = 'encours'; lbl = 'Synchronisation…'; titre = lbl; }
     else if (Synchro.etat === 'erreur') { etat = 'erreur'; lbl = 'Erreur'; titre = 'Erreur de synchronisation : ' + Synchro.erreur; }
     else { etat = 'ok'; lbl = 'Synchronisé'; titre = 'Synchronisé' + (Synchro.derniere ? ' à ' + Synchro.derniere.toLocaleTimeString('fr-FR') : ''); }
+  } else if (Drive.connecte()) {
+    if (!navigator.onLine) { etat = 'horsligne'; lbl = 'Hors-ligne'; titre = 'Hors-ligne : les saisies seront envoyées sur Google Drive au retour du réseau'; }
+    else if (Drive.etat === 'encours') { etat = 'encours'; lbl = 'Drive…'; titre = 'Enregistrement sur Google Drive'; }
+    else if (Drive.etat === 'reconnexion') { etat = 'erreur'; lbl = 'Reconnecter Drive'; titre = 'Session Google expirée : cliquez pour vous reconnecter'; }
+    else if (Drive.etat === 'erreur') { etat = 'erreur'; lbl = 'Erreur Drive'; titre = 'Google Drive : ' + Drive.erreur; }
+    else { etat = 'ok'; lbl = 'Drive'; titre = 'Enregistré sur Google Drive' + (Drive.derniere ? ' à ' + Drive.derniere.toLocaleTimeString('fr-FR') : ''); }
   } else if (!navigator.onLine) { etat = 'horsligne'; lbl = 'Hors-ligne'; }
   p.className = 'sync-pill ' + etat;
   p.title = titre;
@@ -656,8 +666,9 @@ function vPortefeuille() {
 /* =============================== Paramètres ============================== */
 function vParametres() {
   const t = ui.paramTab;
-  const nav = [['equipe', 'users', 'Équipe & synchronisation'], ['entreprise', 'landmark', 'Entreprise'], ['donnees', 'database', 'Données'], ['profil', 'user', 'Profil'], ['rappels', 'calendar-range', 'Rappels & agenda'], ['apparence', 'sun', 'Apparence'], ['apropos', 'info', 'À propos']];
+  const nav = [['drive', 'cloud', 'Google Drive'], ['equipe', 'users', 'Équipe & synchronisation'], ['entreprise', 'landmark', 'Entreprise'], ['donnees', 'database', 'Données'], ['profil', 'user', 'Profil'], ['rappels', 'calendar-range', 'Rappels & agenda'], ['apparence', 'sun', 'Apparence'], ['apropos', 'info', 'À propos']];
   let corps = '';
+  if (t === 'drive') corps = vDrive();
   if (t === 'equipe') corps = vSynchro();
   if (t === 'rappels') corps = carteRappels();
   if (t === 'donnees') corps = `<div class="card"><div class="card-head"><h3>Importer</h3></div>
@@ -685,7 +696,7 @@ function vParametres() {
   }
   if (t === 'apropos') corps = `<div class="card"><div class="card-body"><div class="row" style="gap:14px;margin-bottom:14px"><div class="logo-mark" style="width:44px;height:44px">OS</div><div><h2>OmSmK</h2><div class="muted">Pilotage de chantiers d'étanchéité et de façade</div></div></div>
       <p class="muted">Méthode : budget technique d'exécution standard, cadences cibles et fichier de suivi hebdomadaire (Excellence Opérationnelle). Les écarts sont calculés comme dans le BTE standard : écart = heures budgétées × % réalisé − heures pointées.</p>
-      <div class="sep"></div><p class="small muted">Fonctionne hors-ligne · données stockées sur l'appareil, synchronisées pour les chantiers partagés · bibliothèques : SheetJS, jsPDF, qrcodejs, supabase-js, icônes Lucide, police Inter.</p></div></div>`;
+      <div class="sep"></div><p class="small muted">Fonctionne hors-ligne · données stockées sur l'appareil, enregistrées sur Google Drive une fois connecté · bibliothèques : SheetJS, jsPDF, qrcodejs, supabase-js, icônes Lucide, police Inter.</p></div></div>`;
   return enTetePage({ eyebrow: 'Organisation', titre: 'Paramètres' }) + `<div class="settings-grid"><nav class="set-nav">${nav.map(([v, ic, l]) => `<button class="${t === v ? 'on' : ''}" data-act="paramTab" data-t="${v}">${icone(ic, 'sm')}${l}</button>`).join('')}</nav><div>${corps}</div></div>`;
 }
 
@@ -1148,7 +1159,11 @@ const ACT = {
   },
 
   // Synchronisation
-  syncPill: () => { if (Synchro.connecte()) { ui.paramTab = 'equipe'; allerA('parametres'); } else modalConnexion(); },
+  syncPill: () => {
+    if (Synchro.connecte()) { ui.paramTab = 'equipe'; allerA('parametres'); return; }
+    if (Drive.connecte() && Drive.etat === 'reconnexion') return ACT.driveConnecter();
+    ui.paramTab = 'drive'; allerA('parametres');
+  },
   syncConnexion: () => modalConnexion(),
   syncEnvoyer: async el => {
     const email = val('cxEmail');
@@ -1230,8 +1245,8 @@ const ACT = {
     save(); allerA('tableau'); toast('Démonstration chargée', 'succes');
   },
   toutEffacer: async () => {
-    if (!await confirmer('Effacer toutes les données', 'Toutes les données de cet appareil seront supprimées. Les chantiers partagés restent en ligne et reviendront à la prochaine synchronisation. Pensez à exporter une sauvegarde.', { ok: 'Tout effacer', danger: true })) return;
-    Synchro.oublierEtat();
+    if (!await confirmer('Effacer toutes les données', 'Toutes les données de cet appareil seront supprimées. Les chantiers partagés et les données enregistrées sur Google Drive restent en ligne et reviendront à la prochaine synchronisation. Pensez à exporter une sauvegarde.', { ok: 'Tout effacer', danger: true })) return;
+    Synchro.oublierEtat(); Drive.oublierEtat();
     db = dbVide(); ui.chantierId = null; save(); render(); toast('Données effacées', 'succes');
   }
 };

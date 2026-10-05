@@ -81,7 +81,28 @@ Synchro.onStatut = () => {
 };
 // Photos reçues d'un autre appareil : les vignettes se chargent au rendu suivant
 addEventListener('online', () => envoyerPhotos());
-document.addEventListener('DOMContentLoaded', () => { Synchro.init().then(() => renderShell()).catch(e => console.error(e)); });
+// Google Drive : la base fusionnée remplace celle de l'appareil
+Drive.base = () => db;
+Drive.remplacerBase = b => { db = Object.assign(dbVide(), b); if (!ch()) ui.chantierId = null; enregistrerLocal(); };
+Drive.onChange = (n, conflits) => { rafraichirApresSynchro(); toast(`${n} mise(s) à jour reprise(s) de Google Drive${conflits ? ` · ${conflits} conflit(s) : version de cet appareil conservée` : ''}`); };
+Drive.onStatut = () => { renderSyncPill(); if (ui.view === 'parametres' && ui.paramTab === 'drive' && !modalOuverte()) rafraichirApresSynchro(); };
+
+/* Base de l'appareil : localStorage est lu tout de suite (démarrage instantané) ;
+   IndexedDB fait foi s'il est plus récent (base trop grosse pour localStorage). */
+async function chargerStockLocal() {
+  try {
+    const r = await StockLocal.lire('db');
+    const leLocal = num(localStorage.getItem(STORE_KEY + '_le'));
+    if (r && r.json && (r.le > leLocal || !localStorage.getItem(STORE_KEY))) {
+      const d = JSON.parse(r.json);
+      if (d && Array.isArray(d.chantiers)) { db = Object.assign(dbVide(), d); render(); }
+    } else if (!r && localStorage.getItem(STORE_KEY)) enregistrerLocal();   // première ouverture : recopie dans IndexedDB
+  } catch (e) { console.error(e); }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  chargerStockLocal().then(() => { Drive.init(); renderSyncPill(); });
+  Synchro.init().then(() => renderShell()).catch(e => console.error(e));
+});
 
 /* -------------------------------- Démarrage ------------------------------ */
 (function demarrer() {

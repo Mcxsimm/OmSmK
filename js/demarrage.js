@@ -29,6 +29,15 @@ document.addEventListener('keydown', e => {
   if (modalOuverte() && !modalVerrou) { if (_resoudreConfirmation) _repondreConfirmation(false); else fermerModal(); }
 });
 
+// Sections « Détail » repliables : mémoriser l'état et dessiner les graphiques à l'ouverture
+document.addEventListener('toggle', e => {
+  const d = e.target;
+  if (!d.matches || !d.matches('details.plus')) return;
+  ui.plusOuvert = Object.assign({}, ui.plusOuvert, { [d.dataset.cle]: d.open });
+  saveUI();
+  if (d.open) dessinerGraphiques();
+}, true);
+
 // Info-bulles des graphiques
 document.addEventListener('pointermove', e => {
   const c = e.target.closest && e.target.closest('[data-tip]');
@@ -123,4 +132,5 @@ document.addEventListener('DOMContentLoaded', () => {
     history.replaceState({}, document.title, location.pathname);
   }
   if (!user) modalIdentite(true);
+  else proposerChoixPages();
 })();

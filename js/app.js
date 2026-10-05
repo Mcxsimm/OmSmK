@@ -73,6 +73,38 @@ const ESPACES = [
   { id: 'coordination', t: 'Coordination', ic: 'messages-square', pages: [['hubCoordination', 'Vue d\'ensemble', 'layout-dashboard'], ['actions', 'Actions', 'list-todo'], ['reunions', 'Réunions & CR', 'messages-square'], ['documents', 'Documents', 'folder-open'], ['annuaire', 'Annuaire', 'contact']] },
   { id: 'gestion', t: 'Gestion', ic: 'wallet', pages: [['hubGestion', 'Vue d\'ensemble', 'layout-dashboard'], ['finances', 'Synthèse financière', 'wallet'], ['situations', 'Situations', 'receipt'], ['devis', 'Devis & relances', 'file-plus'], ['commandes', 'Commandes', 'shopping-cart'], ['raf', 'RAF projet', 'calculator']] }
 ];
+/* Pages affichées : chacun garde ce qui lui sert (Paramètres → Mes pages).
+   Les pages masquées disparaissent des menus, de la recherche, des tuiles, des alertes et du bouton « + ». */
+const PAGES_KEY = 'omsmk_pages';
+const PAGES_FIXES = ['journee', 'hubChantier', 'hubTerrain', 'hubCoordination', 'hubGestion', 'parametres'];
+const PAGES_MASQUEES_DEFAUT = ['charge', 'preparation', 'bilan', 'terrain', 'securite', 'documents'];
+const DESC_PAGES = {
+  charge: 'Affectation des compagnons sur 6 semaines, tous chantiers', portefeuille: 'Tous les chantiers et leurs totaux',
+  tableau: 'Avancement, écarts d\'heures, courbe, points d\'attention', planning: 'Gantt par phase, fin projetée, jalons',
+  suivi: '% d\'avancement saisi chaque semaine par phase', bte: 'Opérations, métrés, cadences, heures budgétées',
+  preparation: '20 étapes de la passation à l\'ouverture du chantier', bilan: 'Écarts finaux, retour d\'expérience, dossier de clôture',
+  pointage: 'Heures des compagnons par jour et par phase', terrain: 'Tâches par zone, QR codes, matrice zones × tâches',
+  journal: 'Journal de chantier, photos, intempéries', qualite: 'Réserves, check-lists, PV de réception',
+  securite: 'Quarts d\'heure, accueils, visites, permis de feu, accidents', actions: 'Qui fait quoi pour quand',
+  reunions: 'Comptes rendus de réunion en PDF', documents: 'Plans, visas, pièces du DOE', annuaire: 'Intervenants du chantier',
+  finances: 'CA, facturation, déboursé, marge fin d\'affaire', situations: 'Situations de travaux mensuelles pour le MOE',
+  devis: 'Travaux supplémentaires, relances de devis et d\'impayés', commandes: 'Commandes fournisseurs, livraisons',
+  raf: 'Reste à faire par poste, CA mérité, coûts SAP'
+};
+const pagesMasquees = () => lireJSON(PAGES_KEY, null) || PAGES_MASQUEES_DEFAUT;
+const pageActive = v => PAGES_FIXES.includes(v) || !pagesMasquees().includes(v);
+// Espaces avec leurs pages visibles ; la « Vue d'ensemble » n'apparaît que s'il reste au moins 3 pages
+function espacesVisibles() {
+  return ESPACES.map(e => {
+    const pages = e.pages.filter(([v]) => !v.startsWith('hub') && pageActive(v));
+    const hub = e.pages.find(([v]) => v.startsWith('hub'));
+    return Object.assign({}, e, { pages: hub && pages.length >= 3 ? [hub, ...pages] : pages });
+  }).filter(e => e.pages.length);
+}
+const visiblesSeulement = liste => liste.filter(a => !a.go || pageActive(a.go));
+// Points d'attention d'un chantier, limités aux pages affichées
+const alertesChantier = (c, s) => visiblesSeulement(alertes(c, s || calcSuivi(db, c.id)).concat(pageActive('securite') ? etatSecurite(c).alertes : []));
+
 const TITRES = Object.assign(Object.fromEntries(ESPACES.flatMap(e => e.pages.map(([v, t]) => [v, t]))), { parametres: 'Paramètres' });
 const espaceDe = v => ESPACES.find(e => e.pages.some(p => p[0] === v)) || null;
 const VUES_SANS_CHANTIER = ['journee', 'charge', 'portefeuille', 'parametres'];
@@ -98,10 +130,10 @@ function compteurs() {
 function renderShell() {
   const c = ch();
   $('#chantierNom').textContent = c ? c.nom : 'Aucun chantier';
-  const esp = espaceDe(ui.view);
+  const esp = espacesVisibles().find(e => e.pages.some(p => p[0] === ui.view)) || espacesVisibles().find(e => e.id === (espaceDe(ui.view) || {}).id) || null;
   const n = compteurs();
   const totalEsp = e => e.pages.reduce((t, [v]) => t + (n[v] || 0), 0);
-  $('#espaces').innerHTML = ESPACES.map(e => `<button class="esp ${esp && esp.id === e.id ? 'on' : ''}" data-act="espace" data-e="${e.id}">${esc(e.t)}${totalEsp(e) ? `<span class="pastille">${totalEsp(e)}</span>` : ''}</button>`).join('');
+  $('#espaces').innerHTML = espacesVisibles().map(e => `<button class="esp ${esp && esp.id === e.id ? 'on' : ''}" data-act="espace" data-e="${e.id}">${esc(e.t)}${totalEsp(e) ? `<span class="pastille">${totalEsp(e)}</span>` : ''}</button>`).join('');
   const sub = $('#subnav');
   if (esp && esp.pages.length > 1 && !(esp.id !== 'accueil' && !c)) {
     sub.innerHTML = `<div class="subnav-in">${esp.pages.map(([v, t, ic]) => `<button class="${ui.view === v ? 'on' : ''}" data-nav="${v}">${icone(ic, 'sm')}<span>${esc(t)}</span>${n[v] ? `<span class="pastille">${n[v]}</span>` : ''}</button>`).join('')}</div>`;
@@ -110,7 +142,7 @@ function renderShell() {
   const mob = [['accueil', 'house', 'Accueil'], ['chantier', 'building-2', 'Chantier'], null, ['terrain', 'hard-hat', 'Terrain'], ['menu', 'menu', 'Menu']];
   $('#bottomNav').innerHTML = mob.map(m => m === null
     ? `<button class="bn-creer" data-act="creer" aria-label="Créer">${icone('plus')}</button>`
-    : `<button class="${(esp && esp.id === m[0]) ? 'active' : ''}" data-act="${m[0] === 'menu' ? 'menuMobile' : 'espace'}" data-e="${m[0]}">${icone(m[1])}<span>${m[2]}</span>${m[0] !== 'menu' && ESPACES.find(e => e.id === m[0]) && totalEsp(ESPACES.find(e => e.id === m[0])) ? '<i class="bn-dot"></i>' : ''}</button>`).join('');
+    : `<button class="${(esp && esp.id === m[0]) ? 'active' : ''}" data-act="${m[0] === 'menu' ? 'menuMobile' : 'espace'}" data-e="${m[0]}">${icone(m[1])}<span>${m[2]}</span>${m[0] !== 'menu' && espacesVisibles().find(e => e.id === m[0]) && totalEsp(espacesVisibles().find(e => e.id === m[0])) ? '<i class="bn-dot"></i>' : ''}</button>`).join('');
   $('#userBtn').innerHTML = `<span class="avatar">${initiales(nomUser())}</span>`;
   renderSyncPill();
   const sombre = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
@@ -249,7 +281,7 @@ function vTableau(c) {
   const indice = s.tot.heures > 0 ? s.tot.gagnees / s.tot.heures : null;
   const theo = avancementTheorique(c);
   const st = statutChantier(c);
-  const al = alertes(c, s).concat(etatSecurite(c).alertes).sort((a, b) => ({ critical: 0, serious: 1, warning: 2 }[a.sev] ?? 9) - ({ critical: 0, serious: 1, warning: 2 }[b.sev] ?? 9));
+  const al = alertesChantier(c, s).sort((a, b) => ({ critical: 0, serious: 1, warning: 2 }[a.sev] ?? 9) - ({ critical: 0, serious: 1, warning: 2 }[b.sev] ?? 9));
   const act = activiteRecente(c);
   const pts = serieAvancement(db, c.id);
   const cdt = nbChecklist(c.id, 'cdt');
@@ -302,7 +334,7 @@ function vTableau(c) {
 
   const mini = `<div class="card mini-stats">
     <div><div class="ms-lbl">${icone('gauge', 'sm')}Productivité</div><div class="ms-val ${indice === null ? '' : cls(indice - 1)}">${indice === null ? '—' : fmt(indice, 2)}</div><div class="xs muted">h produites / h pointées</div></div>
-    <div><div class="ms-lbl">${icone('clipboard-check', 'sm')}Terrain</div><div class="ms-val">${pc(t.pct)}</div><div class="xs muted">${t.faites} / ${t.total} tâches</div></div>
+    ${pageActive('terrain') ? `<div><div class="ms-lbl">${icone('clipboard-check', 'sm')}Terrain</div><div class="ms-val">${pc(t.pct)}</div><div class="xs muted">${t.faites} / ${t.total} tâches</div></div>` : ''}
     <div><div class="ms-lbl">${icone('shield-check', 'sm')}Réserves ouvertes</div><div class="ms-val ${ouvertes ? 'neg' : ''}">${ouvertes}</div><div class="xs muted">${res.length} au total</div></div>
     <div><div class="ms-lbl">${icone('cloud-rain', 'sm')}Intempéries</div><div class="ms-val">${jIntemp}</div><div class="xs muted">jour(s) déclarés</div></div>
   </div>`;
@@ -321,11 +353,11 @@ function vTableau(c) {
         .filter(r => String(r[1] || '').trim()).map(r => `<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join('')}
     </dl></div></div>`;
 
+  // L'essentiel d'abord ; le détail (phases, activité, fiche) se déplie à la demande
   return entete + `<div class="stack">${kpis}
     <div class="grid g-main">${courbe}${attention}</div>
-    ${mini}
-    <div class="grid g-main">${ecarts}${flux}</div>
-    <div class="grid g-2">${phases}${fiche}</div></div>`;
+    <details class="plus" data-cle="tableau" ${ui.plusOuvert && ui.plusOuvert.tableau ? 'open' : ''}><summary>${icone('chevron-down', 'sm')}Détail : écarts et avancement par phase, activité, fiche chantier</summary>
+      <div class="stack">${mini}<div class="grid g-main">${ecarts}${flux}</div><div class="grid g-2">${phases}${fiche}</div></div></details></div>`;
 }
 
 /* ================================ Terrain ================================ */
@@ -666,8 +698,9 @@ function vPortefeuille() {
 /* =============================== Paramètres ============================== */
 function vParametres() {
   const t = ui.paramTab;
-  const nav = [['drive', 'cloud', 'Google Drive'], ['equipe', 'users', 'Équipe & synchronisation'], ['entreprise', 'landmark', 'Entreprise'], ['donnees', 'database', 'Données'], ['profil', 'user', 'Profil'], ['rappels', 'calendar-range', 'Rappels & agenda'], ['apparence', 'sun', 'Apparence'], ['apropos', 'info', 'À propos']];
+  const nav = [['pages', 'layout-dashboard', 'Mes pages'], ['drive', 'cloud', 'Google Drive'], ['equipe', 'users', 'Travail en équipe'], ['entreprise', 'landmark', 'Entreprise'], ['donnees', 'database', 'Données'], ['profil', 'user', 'Profil'], ['rappels', 'calendar-range', 'Rappels & agenda'], ['apparence', 'sun', 'Apparence'], ['apropos', 'info', 'À propos']];
   let corps = '';
+  if (t === 'pages') corps = vMesPages();
   if (t === 'drive') corps = vDrive();
   if (t === 'equipe') corps = vSynchro();
   if (t === 'rappels') corps = carteRappels();
@@ -946,6 +979,7 @@ const ACT = {
     user = { prenom, nom: nom.toUpperCase(), role: val('idRole') };
     localStorage.setItem(USER_KEY, JSON.stringify(user));
     fermerModal(); render(); toast(`Bonjour ${prenom || nom}`, 'succes');
+    setTimeout(proposerChoixPages, 300);
   },
   theme: el => {
     const t = el.dataset.t;

@@ -18,7 +18,7 @@ function tuile(t) {
     ${a ? `<button class="btn sm t-action" ${attrs}>${icone(a.ic || 'plus', 'sm')}${esc(a.lib)}</button>` : ''}
   </div>`;
 }
-const grilleTuiles = ts => `<div class="tuiles">${ts.map(tuile).join('')}</div>`;
+const grilleTuiles = ts => `<div class="tuiles">${ts.filter(t => !t.v || pageActive(t.v)).map(tuile).join('')}</div>`;
 
 function enTeteEspace(c, eyebrow) {
   const st = statutChantier(c);
@@ -54,7 +54,7 @@ function vHubChantier(c) {
     { v: 'bilan', ic: 'flag', titre: 'Bilan', val: c.clotureLe ? 'Clôturé' : `${Object.keys((c.bilan || {}).cloture || {}).length} / ${REF.cloture.length}`, sous: c.clotureLe ? `le ${fmtDate(c.clotureLe)}` : 'étapes de clôture · écarts, cadences, retour d\'expérience' },
     { v: 'bte', ic: 'calculator', titre: 'Budget BTE', val: `${fmt(s.tot.budget, 0)} h`, sous: nbOps ? `${nbOps} opération(s) · ${s.rows.length} phase(s)` : 'aucune opération', action: nbOps ? null : { act: 'importFichier', lib: 'Importer un BTE', ic: 'upload' } }
   ];
-  const al = triSev(alertes(c, s).concat(etatSecurite(c).alertes));
+  const al = triSev(alertesChantier(c, s));
   return enTeteEspace(c, 'Chantier') + `<div class="stack">${resume}${grilleTuiles(tuiles)}
     <div><div class="section-titre">Points d'attention</div>${attentionCourte(al, 'tableau', 'Tous les indicateurs')}</div>
     <div class="row liens-discrets"><button class="btn ghost sm" data-act="chantierEdit" data-id="${esc(c.id)}">${icone('pencil', 'sm')}Fiche chantier</button><button class="btn ghost sm" data-act="rapportPDF">${icone('file-text', 'sm')}Rapport PDF</button><button class="btn ghost sm" data-act="exportExcel">${icone('file-spreadsheet', 'sm')}Export Excel</button></div></div>`;
@@ -82,7 +82,7 @@ function vHubTerrain(c) {
       action: { act: 'secuNewDepuisHub', lib: 'Quart d\'heure', ic: 'messages-square', data: { t: 'causerie' } } }
   ];
   return enTeteEspace(c, 'Terrain') + `<div class="stack">${grilleTuiles(tuiles)}
-    <div><div class="section-titre">Aujourd'hui sur le terrain</div>${attentionCourte(triSev(e.alertes.concat(alertes(c, calcSuivi(db, c.id)).filter(a => ['pointage', 'qualite', 'terrain'].includes(a.go)))), null, '')}</div></div>`;
+    <div><div class="section-titre">Aujourd'hui sur le terrain</div>${attentionCourte(triSev(visiblesSeulement((pageActive('securite') ? e.alertes : []).concat(alertes(c, calcSuivi(db, c.id)).filter(a => ['pointage', 'qualite', 'terrain'].includes(a.go))))), null, '')}</div></div>`;
 }
 
 /* ---------------------------- Espace Coordination ------------------------- */
@@ -135,7 +135,7 @@ function vHubGestion(c) {
 /* ------------------------------ Menu général ------------------------------ */
 function menuGeneral() {
   const c = ch();
-  ouvrirModal('Menu', `<div class="menu-espaces">${ESPACES.map(e => `<div class="menu-esp"><div class="menu-esp-t">${icone(e.ic, 'sm')}${esc(e.t)}</div>
+  ouvrirModal('Menu', `<div class="menu-espaces">${espacesVisibles().map(e => `<div class="menu-esp"><div class="menu-esp-t">${icone(e.ic, 'sm')}${esc(e.t)}</div>
       ${e.pages.map(([v, t, ic]) => `<button class="menu-lien" data-nav="${v}" ${e.id !== 'accueil' && !c ? 'disabled' : ''}>${icone(ic, 'sm')}${esc(t)}</button>`).join('')}</div>`).join('')}
     <div class="menu-esp"><div class="menu-esp-t">${icone('settings', 'sm')}Compte</div>
       <button class="menu-lien" data-nav="parametres">${icone('settings', 'sm')}Paramètres</button>
@@ -157,33 +157,33 @@ function menuUtilisateur(ancre) {
 
 /* ---------------------------- Création rapide ----------------------------- */
 const CREATIONS = [
-  { id: 'pointer', ic: 'clock', t: 'Pointer l\'équipe', s: 'présences et heures du jour', go: () => { ui.ptDate = aujourdHui(); ui.ptMode = 'jour'; allerA('pointage'); } },
-  { id: 'photo', ic: 'camera', t: 'Prendre une photo', s: 'avancement, détail, livraison', go: () => $('#phGalerieInput').click() },
-  { id: 'journal', ic: 'notebook-pen', t: 'Entrée de journal', s: 'météo, effectif, événements', go: () => modalJournal(null) },
-  { id: 'action', ic: 'list-todo', t: 'Nouvelle action', s: 'qui fait quoi, pour quand', go: () => modalAction(null) },
-  { id: 'reserve', ic: 'circle-alert', t: 'Nouvelle réserve', s: 'défaut à lever, avec photo', go: () => modalReserve(null) },
-  { id: 'causerie', ic: 'shield-alert', t: 'Quart d\'heure sécurité', s: 'thème et émargement', go: () => modalSecu('causerie', null) },
-  { id: 'permis', ic: 'flame', t: 'Permis de feu', s: 'travaux par point chaud', go: () => modalSecu('permis', null) },
-  { id: 'cr', ic: 'messages-square', t: 'Compte rendu', s: 'réunion de chantier', go: () => { ui.reunionId = null; allerA('reunions'); ACT.reuNew(); } },
-  { id: 'commande', ic: 'shopping-cart', t: 'Commande', s: 'matériaux, matériel', go: () => modalCommande(null) },
-  { id: 'devis', ic: 'file-plus', t: 'Devis de travaux sup.', s: 'chiffrage, PDF, relances', go: () => modalDevis(null) },
-  { id: 'document', ic: 'folder-open', t: 'Document', s: 'plan, fiche, visa, DOE', go: () => modalDocument(null) },
+  { id: 'pointer', page: 'pointage', ic: 'clock', t: 'Pointer l\'équipe', s: 'présences et heures du jour', go: () => { ui.ptDate = aujourdHui(); ui.ptMode = 'jour'; allerA('pointage'); } },
+  { id: 'photo', page: 'journal', ic: 'camera', t: 'Prendre une photo', s: 'avancement, détail, livraison', go: () => $('#phGalerieInput').click() },
+  { id: 'journal', page: 'journal', ic: 'notebook-pen', t: 'Entrée de journal', s: 'météo, effectif, événements', go: () => modalJournal(null) },
+  { id: 'action', page: 'actions', ic: 'list-todo', t: 'Nouvelle action', s: 'qui fait quoi, pour quand', go: () => modalAction(null) },
+  { id: 'reserve', page: 'qualite', ic: 'circle-alert', t: 'Nouvelle réserve', s: 'défaut à lever, avec photo', go: () => modalReserve(null) },
+  { id: 'causerie', page: 'securite', ic: 'shield-alert', t: 'Quart d\'heure sécurité', s: 'thème et émargement', go: () => modalSecu('causerie', null) },
+  { id: 'permis', page: 'securite', ic: 'flame', t: 'Permis de feu', s: 'travaux par point chaud', go: () => modalSecu('permis', null) },
+  { id: 'cr', page: 'reunions', ic: 'messages-square', t: 'Compte rendu', s: 'réunion de chantier', go: () => { ui.reunionId = null; allerA('reunions'); ACT.reuNew(); } },
+  { id: 'commande', page: 'commandes', ic: 'shopping-cart', t: 'Commande', s: 'matériaux, matériel', go: () => modalCommande(null) },
+  { id: 'devis', page: 'devis', ic: 'file-plus', t: 'Devis de travaux sup.', s: 'chiffrage, PDF, relances', go: () => modalDevis(null) },
+  { id: 'document', page: 'documents', ic: 'folder-open', t: 'Document', s: 'plan, fiche, visa, DOE', go: () => modalDocument(null) },
   { id: 'rapport', ic: 'file-text', t: 'Rapport mensuel', s: 'PDF d\'avancement pour le MOE', go: () => modalRapportMensuel() },
-  { id: 'pv', ic: 'file-check', t: 'PV de réception', s: 'avec signatures à l\'écran', go: () => { ui.qualiteTab = 'pv'; allerA('qualite'); modalPV('reception', null); } },
+  { id: 'pv', page: 'qualite', ic: 'file-check', t: 'PV de réception', s: 'avec signatures à l\'écran', go: () => { ui.qualiteTab = 'pv'; allerA('qualite'); modalPV('reception', null); } },
   { id: 'agenda', ic: 'calendar-range', t: 'Ajouter à mon agenda', s: 'réunions, échéances, rappels', go: () => modalAgenda() }
 ];
 function menuCreer() {
   const c = ch();
   if (!c) return modalChantier(null);
   ouvrirModal('Créer', `<p class="small muted" style="margin-bottom:12px">Sur le chantier <b>${esc(c.nom)}</b></p>
-    <div class="creer-grille">${CREATIONS.map(x => `<button class="creer-item" data-act="creerGo" data-id="${x.id}"><span class="t-ico">${icone(x.ic)}</span><span><b>${esc(x.t)}</b><small>${esc(x.s)}</small></span></button>`).join('')}</div>`,
+    <div class="creer-grille">${CREATIONS.filter(x => !x.page || pageActive(x.page)).map(x => `<button class="creer-item" data-act="creerGo" data-id="${x.id}"><span class="t-ico">${icone(x.ic)}</span><span><b>${esc(x.t)}</b><small>${esc(x.s)}</small></span></button>`).join('')}</div>`,
     '', { icone: 'plus', taille: 'wide' });
 }
 
 /* -------------------------------- Recherche ------------------------------- */
 function entreesRecherche() {
   const out = [];
-  ESPACES.forEach(e => e.pages.forEach(([v, t, ic]) => out.push({ ic, t, s: e.t, run: () => allerA(v), besoinCh: e.id !== 'accueil' })));
+  espacesVisibles().forEach(e => e.pages.forEach(([v, t, ic]) => out.push({ ic, t, s: e.t, run: () => allerA(v), besoinCh: e.id !== 'accueil' })));
   out.push({ ic: 'settings', t: 'Paramètres', s: 'Compte', run: () => allerA('parametres') });
   CREATIONS.forEach(x => out.push({ ic: x.ic, t: x.t, s: 'Créer', run: () => { fermerModal(); x.go(); }, besoinCh: true }));
   db.chantiers.forEach(c => out.push({ ic: 'building-2', t: c.nom, s: 'Chantier' + (c.otp ? ' · OTP ' + c.otp : '') + (c.client ? ' · ' + c.client : ''), run: () => { ui.chantierId = c.id; ui.zone = null; allerA('hubChantier'); } }));
@@ -213,7 +213,7 @@ function renderRecherche(q) {
 /* --------------------------------- Actions -------------------------------- */
 Object.assign(ACT, {
   espace: el => {
-    const e = ESPACES.find(x => x.id === el.dataset.e);
+    const e = espacesVisibles().find(x => x.id === el.dataset.e);
     if (!e) return;
     if (e.id !== 'accueil' && !ch()) { if (!db.chantiers.length) return allerA('journee'); ui.chantierId = db.chantiers[0].id; }
     allerA(e.pages[0][0]);
@@ -226,3 +226,38 @@ Object.assign(ACT, {
   secuNewDepuisHub: el => modalSecu(el.dataset.t || 'causerie', null)
 });
 Object.assign(INP, { rcFiltre: el => renderRecherche(el.value) });
+
+/* ------------------------------- Mes pages -------------------------------- */
+// Cases à cocher par espace ; « Ma journée » et les vues d'ensemble restent toujours là
+function choixPagesHTML() {
+  const masquees = pagesMasquees();
+  return `<div class="choix-pages">${ESPACES.map(e => {
+    const ps = e.pages.filter(([v]) => !PAGES_FIXES.includes(v));
+    return ps.length ? `<div class="cp-esp"><div class="menu-esp-t">${icone(e.ic, 'sm')}${esc(e.t)}</div>
+      ${ps.map(([v, t, ic]) => `<label class="cp-item"><input type="checkbox" data-page="${v}" ${masquees.includes(v) ? '' : 'checked'}>
+        <span class="t-ico">${icone(ic, 'sm')}</span><span class="grow"><b>${esc(t)}</b><small>${esc(DESC_PAGES[v] || '')}</small></span></label>`).join('')}</div>` : '';
+  }).join('')}</div>`;
+}
+function lirePagesCochees() {
+  const masquees = $$('.choix-pages [data-page]').filter(i => !i.checked).map(i => i.dataset.page);
+  try { localStorage.setItem(PAGES_KEY, JSON.stringify(masquees)); } catch (_e) { /* ignoré */ }
+  if (!pageActive(ui.view)) ui.view = 'journee';
+}
+function vMesPages() {
+  return `<div class="card"><div class="card-head"><h3>Pages affichées</h3><span class="hint">décochez ce dont vous ne vous servez pas : rien n'est supprimé</span></div>
+    <div class="card-body">${choixPagesHTML()}</div>
+    <div class="card-foot row"><button class="btn ghost sm" data-act="pagesDefaut">${icone('undo-2', 'sm')}Sélection conseillée</button><button class="btn ghost sm" data-act="pagesToutes">Tout afficher</button><span class="grow"></span><button class="btn primary" data-act="pagesEnregistrer">${icone('check')}Enregistrer</button></div></div>`;
+}
+// Premier lancement : choisir ses pages, la sélection conseillée est pré-cochée
+function proposerChoixPages() {
+  if (lireJSON(PAGES_KEY, null) || modalOuverte()) return;
+  ouvrirModal('Que voulez-vous voir ?', `<p class="muted" style="margin-bottom:14px">Gardez seulement les pages qui vous servent : l'application sera plus simple. Vous pourrez changer d'avis à tout moment dans <b>Paramètres → Mes pages</b>, rien n'est supprimé.</p>${choixPagesHTML()}`,
+    `<button class="btn" data-act="pagesToutesFermer">Tout garder</button><button class="btn primary" data-act="pagesPremier">${icone('check')}C'est parti</button>`, { icone: 'layout-dashboard', taille: 'wide' });
+}
+Object.assign(ACT, {
+  pagesEnregistrer: () => { lirePagesCochees(); render(); toast('Pages enregistrées', 'succes'); },
+  pagesDefaut: () => { $$('.choix-pages [data-page]').forEach(i => { i.checked = !PAGES_MASQUEES_DEFAUT.includes(i.dataset.page); }); },
+  pagesToutes: () => { $$('.choix-pages [data-page]').forEach(i => { i.checked = true; }); },
+  pagesPremier: () => { lirePagesCochees(); fermerModal(); render(); },
+  pagesToutesFermer: () => { try { localStorage.setItem(PAGES_KEY, '[]'); } catch (_e) { /* ignoré */ } fermerModal(); render(); }
+});

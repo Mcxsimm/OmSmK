@@ -765,3 +765,29 @@ tr.clic:hover td { background: var(--surface-2); }
 .sig-pied { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 4px 12px; border-top: 1px solid #eef0f3; background: #fafbfc; }
 .sig-pied .xs { color: #667085; }
 .sig-pied .btn { color: #344054; }
+
+/* --------------------------- Plan de charge ----------------------------- */
+.table.charge td, .table.charge th { padding-left: 8px; padding-right: 8px; }
+.charge-sel { height: 32px; min-width: 112px; font-size: 12.5px; padding: 0 6px; }
+.charge-sel.chantier { background: var(--brand-soft); border-color: transparent; color: var(--brand-2); font-weight: 600; }
+.charge-sel.absence { background: var(--surface-3); border-color: transparent; color: var(--text-2); font-style: italic; }
+.charge-sel.vide { color: var(--text-3); }
+.charge-jauge { display: inline-flex; align-items: baseline; gap: 1px; min-width: 52px; justify-content: center; padding: 3px 8px; border-radius: 8px; font-weight: 700; background: var(--surface-3); }
+.charge-jauge small { font-weight: 500; color: var(--text-3); }
+.charge-jauge.ok { background: var(--pos-soft); color: var(--pos); }
+.charge-jauge.manque { background: var(--neg-soft); color: var(--neg); }
+.charge-jauge.exces { background: var(--warn-soft); color: var(--warn); }
+tr.charge-ch td { background: var(--surface-2); }
+
+/* ---------------------------- Préparation ------------------------------- */
+.prep-item { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+.prep-item:last-child { border-bottom: 0; }
+.prep-item.fait .strong { color: var(--text-2); }
+.prep-item.so { opacity: .6; }
+.prep-txt { min-width: 0; flex: 1; }
+.prep-txt .r-meta { margin-top: 4px; }
+.prep-champs { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+.prep-champs .input { height: 34px; width: auto; }
+.prep-st.st-fait { background: var(--pos-soft); color: var(--pos); border-color: var(--pos-line); font-weight: 600; }
+.prep-st.st-encours { background: var(--info-soft); color: var(--info); border-color: var(--info-line); font-weight: 600; }
+@media (max-width: 760px) { .prep-item { flex-direction: column; align-items: stretch; gap: 8px; } .prep-champs .input { flex: 1; } }

@@ -97,10 +97,11 @@ function vSituations(c) {
         : vide('list', 'Aucune décomposition saisie', `${num(c.marcheHT) ? `Les situations utilisent pour l'instant une ligne unique « Marché de base » de ${fmtE(c.marcheHT)}. ` : ''}Saisissez les postes de la DPGF pour facturer poste par poste, et les avenants / travaux supplémentaires.`,
           `<button class="btn primary" data-act="posteNew" data-av="0">${icone('plus')}Ajouter un poste</button><button class="btn" data-act="dpgfImport">${icone('upload')}Importer</button>`)}</div>
       <div class="card"><div class="card-head"><h3>Conditions de facturation</h3></div>
-        <div class="card-body"><div class="form-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+        <div class="card-body"><div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
           ${champ('pfRg', 'Retenue de garantie (%)', pf.rg, 'number', 'step="0.5" data-change="paramFin" data-k="rg"')}
           ${champ('pfPro', 'Compte prorata (%)', pf.prorata, 'number', 'step="0.1" data-change="paramFin" data-k="prorata"')}
           ${champ('pfTva', 'TVA (%)', pf.tva, 'number', 'step="0.1" data-change="paramFin" data-k="tva"')}
+          ${champ('pfDelai', 'Délai de paiement (jours)', pf.delai, 'number', 'step="1" data-change="paramFin" data-k="delai"')}
         </div><p class="small muted">Appliqués au montant HT de chaque situation. TVA à 0 % en cas d'autoliquidation (sous-traitance).</p></div></div>
     </div>`;
   }

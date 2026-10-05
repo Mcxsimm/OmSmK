@@ -50,6 +50,8 @@ function vHubChantier(c) {
     { v: 'planning', ic: 'chart-gantt', titre: 'Planning', val: pl.finProjetee ? fmtDate(pl.finProjetee) : 'À établir', sous: pl.finProjetee ? (pl.retard ? `${pl.retard} jour(s) de retard sur le contrat` : 'fin projetée, dans les délais') : `${pl.rows.length} phase(s) à planifier`,
       etat: pl.retard ? 'alerte' : '', badge: pl.rows.filter(r => r.statut === 'retard').length ? `${pl.rows.filter(r => r.statut === 'retard').length} en retard` : '', action: pl.finProjetee ? null : (pl.rows.length ? { act: 'planGenerer', lib: 'Générer', ic: 'sparkles' } : null) },
     { v: 'suivi', ic: 'trending-up', titre: 'Suivi hebdo', val: `Semaine ${semISO(sem)}`, sous: semSaisie ? 'avancement de la semaine saisi' : 'avancement de la semaine à saisir', etat: semSaisie || !s.rows.length ? '' : 'alerte', badge: semSaisie ? 'à jour' : '', action: semSaisie ? null : { nav: 'suivi', lib: 'Saisir les %', ic: 'pencil' } },
+    (() => { const e = etatPreparation(db, c.id, REF.preparation); return { v: 'preparation', ic: 'list-checks', titre: 'Préparation', val: pc(e.pct), sous: e.retard.length ? `${e.retard.length} étape(s) en retard` : `${e.faits} / ${e.total} étapes réalisées`, etat: e.retard.length ? 'alerte' : '' }; })(),
+    { v: 'bilan', ic: 'flag', titre: 'Bilan', val: c.clotureLe ? 'Clôturé' : `${Object.keys((c.bilan || {}).cloture || {}).length} / ${REF.cloture.length}`, sous: c.clotureLe ? `le ${fmtDate(c.clotureLe)}` : 'étapes de clôture · écarts, cadences, retour d\'expérience' },
     { v: 'bte', ic: 'calculator', titre: 'Budget BTE', val: `${fmt(s.tot.budget, 0)} h`, sous: nbOps ? `${nbOps} opération(s) · ${s.rows.length} phase(s)` : 'aucune opération', action: nbOps ? null : { act: 'importFichier', lib: 'Importer un BTE', ic: 'upload' } }
   ];
   const al = triSev(alertes(c, s).concat(etatSecurite(c).alertes));
@@ -96,6 +98,7 @@ function vHubCoordination(c) {
       etat: der && !der.diffuseLe ? 'alerte' : '', badge: der && !der.diffuseLe ? 'à diffuser' : '', action: { act: 'reuNew', lib: 'Nouveau CR', ic: 'plus' } },
     { act: 'rapportMensuel', ic: 'file-text', titre: 'Rapport mensuel', val: moisLong(aujourdHui().slice(0, 7)).replace(/^./, x => x.toUpperCase()), sous: 'avancement, planning, effectifs, sécurité, photos — PDF pour le maître d\'œuvre' },
     { act: 'agenda', ic: 'calendar-range', titre: 'Mon agenda', val: `${evenementsAgenda([c], TYPES_AGENDA.map(x => x[0])).length} événement(s)`, sous: 'réunions, échéances, jalons et livraisons à ajouter au téléphone, avec rappels' },
+    (() => { const ds = derniersIndices(c.id), att = documentsEnAttente(db, c.id); return { v: 'documents', ic: 'folder-open', titre: 'Documents', val: `${ds.length} document(s)`, sous: att.length ? `${att.length} visa(s) en attente depuis plus de 15 jours` : `${ds.filter(d => d.doe).length} pièce(s) du DOE`, etat: att.length ? 'alerte' : '', action: { act: 'docNew', lib: 'Ajouter', ic: 'plus' } }; })(),
     { v: 'annuaire', ic: 'contact', titre: 'Annuaire', val: `${ks.length} intervenant(s)`, sous: [...new Set(ks.map(k => k.role))].slice(0, 3).join(' · ') || 'MOA, MOE, CSPS, fournisseurs…', action: { act: 'contactNew', lib: 'Ajouter', ic: 'plus' } }
   ];
   const prochaines = ouvertes.slice(0, 5);
@@ -117,6 +120,7 @@ function vHubGestion(c) {
     { v: 'finances', ic: 'wallet', titre: 'Synthèse financière', val: f.ca ? fmtE(f.margePFA) : '—', sous: f.ca ? `marge fin d'affaire · ${pc(f.tauxMargePFA)} (prévu ${pc(f.tauxMargePrevue)})` : 'montant du marché à renseigner', etat: f.ca && f.margePFA < f.margePrevue - 1 ? 'alerte' : '' },
     { v: 'situations', ic: 'receipt', titre: 'Situations', val: derSit ? `N° ${derSit.numero}` : 'Aucune', sous: derSit ? `${moisLong(derSit.mois)} · ${libStatut(STATUTS_SITUATION, derSit.statut).toLowerCase()} · ${pc(f.avFinancier)} facturé` : 'première situation à établir',
       etat: f.ca && !sitMois && c.dateDebut && c.dateDebut <= auj ? 'alerte' : '', badge: f.ca && !sitMois && c.dateDebut && c.dateDebut <= auj ? 'mois à établir' : '', action: { act: 'sitNew', lib: 'Nouvelle situation', ic: 'plus' } },
+    (() => { const att = devisDe(c.id).filter(d => d.statut === 'emis'), imp = situationsImpayees(db, c.id), rel = devisARelancer(db, c.id); return { v: 'devis', ic: 'file-plus', titre: 'Devis & relances', val: imp.length ? `${fmtE(imp.reduce((t, x) => t + x.ttc, 0))}` : fmtE(att.reduce((t, d) => t + montantDevis(d), 0)), sous: imp.length ? `${imp.length} situation(s) impayée(s)` : `${att.length} devis en attente${rel.length ? ` · ${rel.length} à relancer` : ''}`, etat: imp.length || rel.length ? 'alerte' : '', badge: imp.length || rel.length ? `${imp.length + rel.length} relance(s)` : '', action: { act: 'devisNew', lib: 'Nouveau devis', ic: 'plus' } }; })(),
     { v: 'commandes', ic: 'shopping-cart', titre: 'Commandes & achats', val: fmtE(engage), sous: retardLiv.length ? `${retardLiv.length} livraison(s) en retard` : `engagé · ${cmds.length} commande(s)`, etat: retardLiv.length ? 'alerte' : '', action: { act: 'cmdNew', lib: 'Nouvelle commande', ic: 'plus' } }
   ];
   const resume = f.ca ? `<div class="resume">
@@ -161,6 +165,8 @@ const CREATIONS = [
   { id: 'permis', ic: 'flame', t: 'Permis de feu', s: 'travaux par point chaud', go: () => modalSecu('permis', null) },
   { id: 'cr', ic: 'messages-square', t: 'Compte rendu', s: 'réunion de chantier', go: () => { ui.reunionId = null; allerA('reunions'); ACT.reuNew(); } },
   { id: 'commande', ic: 'shopping-cart', t: 'Commande', s: 'matériaux, matériel', go: () => modalCommande(null) },
+  { id: 'devis', ic: 'file-plus', t: 'Devis de travaux sup.', s: 'chiffrage, PDF, relances', go: () => modalDevis(null) },
+  { id: 'document', ic: 'folder-open', t: 'Document', s: 'plan, fiche, visa, DOE', go: () => modalDocument(null) },
   { id: 'rapport', ic: 'file-text', t: 'Rapport mensuel', s: 'PDF d\'avancement pour le MOE', go: () => modalRapportMensuel() },
   { id: 'pv', ic: 'file-check', t: 'PV de réception', s: 'avec signatures à l\'écran', go: () => { ui.qualiteTab = 'pv'; allerA('qualite'); modalPV('reception', null); } },
   { id: 'agenda', ic: 'calendar-range', t: 'Ajouter à mon agenda', s: 'réunions, échéances, rappels', go: () => modalAgenda() }

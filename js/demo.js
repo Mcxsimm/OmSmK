@@ -197,5 +197,34 @@ function construireDemo(lundiCourant) {
     { id: id(), chantierId: cid, type: 'permis', date: s2, zone: 'Terrasses 01 et 02 — relevés', debut: '08:00', fin: '15:30', travaux: 'Soudure de membranes bitumineuses au chalumeau', intervenants: [K, L], mesures: items(6), surveillance: { fait: true, heure: '17:35', par: 'Karim Benali' }, par: 'Démo' }
   ];
 
-  return { chantier, ops, suivi, taches, journal, reserves, checklists, postes, situations, commandes, compagnons, pointages, contacts, reunions, actions, securite };
+  // Plan de charge : semaine courante et suivante sur le chantier, congés de Lucas dans deux semaines
+  const cleP = k => `${k.prenom} ${k.nom}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const fnv = t => { let h = 0x811c9dc5; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
+  const aff = (k, sem, statut) => ({ id: `af|${fnv(cleP(k))}|${sem}`, personne: cleP(k), nom: `${k.prenom} ${k.nom}`, semaine: sem, statut, chantierId: cid, par: 'Démo' });
+  const affectations = [aff(compagnons[0], s2, 'chantier'), aff(compagnons[1], s2, 'chantier'), aff(compagnons[0], addDays(s2, 7), 'chantier'), aff(compagnons[1], addDays(s2, 7), 'chantier'), aff(compagnons[0], addDays(s2, 14), 'chantier'), aff(compagnons[1], addDays(s2, 14), 'conge')];
+
+  // Devis de travaux supplémentaires : TS 01 accepté (avenant), TS 02 en attente depuis trois semaines
+  const ts01 = postes.find(p => p.avenant);
+  const devis = [
+    { id: id(), chantierId: cid, numero: 'TS 01', objet: ts01.designation, demandePar: 'MOE — CR n° 1', dateEmission: addDays(s1, 1), statut: 'accepte', dateAcceptation: addDays(s1, 4), posteId: ts01.id, relances: [], lignes: [{ designation: 'Crapaudine fonte Ø100', quantite: 4, unite: 'U', pu: 65 }, { designation: 'Trop-plein acier galvanisé', quantite: 2, unite: 'U', pu: 110 }], creeLe: addDays(s1, 1), par: 'Marc' },
+    { id: id(), chantierId: cid, numero: 'TS 02', objet: 'Reprise d\'étanchéité de l\'acrotère nord après ragréage', demandePar: 'MOA', dateEmission: addDays(s2, -20), statut: 'emis', relances: [], lignes: [{ designation: 'Dépose et repose de relevé', quantite: 18, unite: 'mL', pu: 38 }, { designation: 'Équerre de renfort', quantite: 18, unite: 'mL', pu: 12.5 }], notes: 'Validité de l\'offre : 30 jours.', creeLe: addDays(s2, -20), par: 'Marc' }
+  ];
+
+  // Registre des documents
+  const doc_ = (reference, type, titre, indice, statut, diffuseLe, doe, visa) => ({ id: id(), chantierId: cid, reference, type, titre, indice, statut, diffuseLe, diffusion: 'MOE, bureau de contrôle', emetteur: 'SMAC', doe, visa: visa || null, creeLe: diffuseLe || s1, par: 'Marc' });
+  const documents = [
+    doc_('EXE-ETA-001', 'Carnet de détails', 'Carnet de détails — toiture A', 'A', 'vise_obs', addDays(s1, -30), false, { date: addDays(s1, -20), par: 'Bureau de contrôle', avis: 'Préciser la hauteur des relevés en acrotère' }),
+    doc_('EXE-ETA-001', 'Carnet de détails', 'Carnet de détails — toiture A', 'B', 'vise', addDays(s1, -15), true, { date: addDays(s1, -8), par: 'Bureau de contrôle', avis: '' }),
+    doc_('EXE-ETA-002', 'Plan d\'exécution', 'Plan de calepinage de l\'isolant', 'A', 'diffuse', addDays(s2, -18), true),
+    doc_('FT-001', 'Fiche technique', 'Hyrène 25/25 TS — fiche technique', '1', 'vise', addDays(s1, -25), true, { date: addDays(s1, -21), par: 'MOE', avis: '' }),
+    doc_('AT-001', 'Avis technique', 'Avis technique du procédé bicouche', '1', 'vise', addDays(s1, -25), true, { date: addDays(s1, -21), par: 'Bureau de contrôle', avis: '' })
+  ];
+
+  // Préparation de chantier
+  const fait = (j) => ({ statut: 'fait', date: addDays(s1, j), par: 'Marc' });
+  checklists[cid].prep = { '0-0': fait(-30), '0-1': fait(-28), '0-2': fait(-25), '0-3': fait(-14), '1-0': fait(-20), '1-1': { statut: 'so' }, '1-2': { statut: 'so' }, '1-3': fait(-10), '1-4': fait(-12), '1-5': fait(-2),
+    '2-0': fait(-15), '2-1': { statut: 'encours', echeance: addDays(s2, -3), responsable: 'Marc', note: 'Plan de calepinage EXE-ETA-002 en attente' }, '2-2': fait(-21), '2-3': { statut: 'encours', echeance: addDays(s2, 9), responsable: 'CIGV (Claire Durand)', note: 'Couvertine RAL 7016' }, '2-4': fait(-7),
+    '3-0': fait(-7), '3-1': fait(-9), '3-2': fait(-9), '3-3': fait(-10), '3-4': fait(-3) };
+
+  return { chantier, ops, suivi, taches, journal, reserves, checklists, postes, situations, commandes, compagnons, pointages, contacts, reunions, actions, securite, affectations, devis, documents };
 }

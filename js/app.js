@@ -10,7 +10,7 @@ const UI_KEY = 'omsmk_ui';
 const REF = REFERENTIEL;
 
 /* ================================ État =================================== */
-function dbVide() { return { version: 1, chantiers: [], ops: [], suivi: [], taches: [], journal: [], reserves: [], checklists: {}, postes: [], situations: [], commandes: [], compagnons: [], pointages: [], contacts: [], reunions: [], actions: [], securite: [], photos: [], pvs: [] }; }
+function dbVide() { return { version: 1, chantiers: [], ops: [], suivi: [], taches: [], journal: [], reserves: [], checklists: {}, postes: [], situations: [], commandes: [], compagnons: [], pointages: [], contacts: [], reunions: [], actions: [], securite: [], photos: [], pvs: [], affectations: [], devis: [], documents: [] }; }
 function chargerDB() {
   const d = lireJSON(STORE_KEY, null);
   return d && Array.isArray(d.chantiers) ? Object.assign(dbVide(), d) : dbVide();
@@ -43,6 +43,7 @@ function nbChecklist(cid, cle) {
 }
 function statutChantier(c) {
   const auj = aujourdHui();
+  if (c.clotureLe) return { txt: 'Clôturé', cls: '' };
   if (!c.dateDebut) return { txt: 'En préparation', cls: '' };
   if (auj < c.dateDebut) return { txt: 'À venir', cls: 'info' };
   if (c.dateFin && auj > c.dateFin) return { txt: 'Délai dépassé', cls: 'warn' };
@@ -62,15 +63,15 @@ const numeroReserve = (r) => {
 /* Navigation par espaces : chaque espace ouvre une page d'accueil (tuiles) et
    propose ses pages en onglets ; pas de longue liste de menus. */
 const ESPACES = [
-  { id: 'accueil', t: 'Accueil', ic: 'house', pages: [['journee', 'Ma journée', 'house'], ['portefeuille', 'Portefeuille', 'briefcase']] },
-  { id: 'chantier', t: 'Chantier', ic: 'building-2', pages: [['hubChantier', 'Vue d\'ensemble', 'layout-dashboard'], ['tableau', 'Indicateurs', 'gauge'], ['planning', 'Planning', 'chart-gantt'], ['suivi', 'Suivi hebdo', 'trending-up'], ['bte', 'Budget BTE', 'calculator']] },
+  { id: 'accueil', t: 'Accueil', ic: 'house', pages: [['journee', 'Ma journée', 'house'], ['charge', 'Plan de charge', 'users'], ['portefeuille', 'Portefeuille', 'briefcase']] },
+  { id: 'chantier', t: 'Chantier', ic: 'building-2', pages: [['hubChantier', 'Vue d\'ensemble', 'layout-dashboard'], ['tableau', 'Indicateurs', 'gauge'], ['planning', 'Planning', 'chart-gantt'], ['suivi', 'Suivi hebdo', 'trending-up'], ['bte', 'Budget BTE', 'calculator'], ['preparation', 'Préparation', 'list-checks'], ['bilan', 'Bilan', 'flag']] },
   { id: 'terrain', t: 'Terrain', ic: 'hard-hat', pages: [['hubTerrain', 'Vue d\'ensemble', 'layout-dashboard'], ['pointage', 'Pointage', 'clock'], ['terrain', 'Saisie terrain', 'clipboard-check'], ['journal', 'Journal & photos', 'camera'], ['qualite', 'Qualité', 'shield-check'], ['securite', 'Sécurité', 'shield-alert']] },
-  { id: 'coordination', t: 'Coordination', ic: 'messages-square', pages: [['hubCoordination', 'Vue d\'ensemble', 'layout-dashboard'], ['actions', 'Actions', 'list-todo'], ['reunions', 'Réunions & CR', 'messages-square'], ['annuaire', 'Annuaire', 'contact']] },
-  { id: 'gestion', t: 'Gestion', ic: 'wallet', pages: [['hubGestion', 'Vue d\'ensemble', 'layout-dashboard'], ['finances', 'Synthèse financière', 'wallet'], ['situations', 'Situations', 'receipt'], ['commandes', 'Commandes', 'shopping-cart']] }
+  { id: 'coordination', t: 'Coordination', ic: 'messages-square', pages: [['hubCoordination', 'Vue d\'ensemble', 'layout-dashboard'], ['actions', 'Actions', 'list-todo'], ['reunions', 'Réunions & CR', 'messages-square'], ['documents', 'Documents', 'folder-open'], ['annuaire', 'Annuaire', 'contact']] },
+  { id: 'gestion', t: 'Gestion', ic: 'wallet', pages: [['hubGestion', 'Vue d\'ensemble', 'layout-dashboard'], ['finances', 'Synthèse financière', 'wallet'], ['situations', 'Situations', 'receipt'], ['devis', 'Devis & relances', 'file-plus'], ['commandes', 'Commandes', 'shopping-cart']] }
 ];
 const TITRES = Object.assign(Object.fromEntries(ESPACES.flatMap(e => e.pages.map(([v, t]) => [v, t]))), { parametres: 'Paramètres' });
 const espaceDe = v => ESPACES.find(e => e.pages.some(p => p[0] === v)) || null;
-const VUES_SANS_CHANTIER = ['journee', 'portefeuille', 'parametres'];
+const VUES_SANS_CHANTIER = ['journee', 'charge', 'portefeuille', 'parametres'];
 
 // Pastilles de comptage (retards, alertes) par page
 function compteurs() {
@@ -81,6 +82,9 @@ function compteurs() {
     n.actions = actionsDe(db, c.id).filter(a => actionEnRetard(a, auj)).length;
     n.securite = permisAsurveiller(c.id).length;
     n.planning = calcPlanning(db, c.id, auj).rows.filter(r => r.statut === 'retard').length;
+    n.devis = devisARelancer(db, c.id, auj).length + situationsImpayees(db, c.id, auj).length;
+    n.documents = documentsEnAttente(db, c.id, auj).length;
+    n.preparation = etatPreparation(db, c.id, REF.preparation, auj).retard.length;
   }
   n.journee = actionsDe(db).filter(a => actionEnRetard(a, auj) && db.chantiers.some(x => x.id === a.chantierId)).length;
   n.portefeuille = 0;
@@ -125,7 +129,7 @@ function renderSyncPill() {
 }
 
 const VUES = { tableau: vTableau, terrain: vTerrain, suivi: vSuivi, bte: vBTE, journal: vJournal, qualite: vQualite, portefeuille: vPortefeuille, parametres: vParametres, finances: c => vFinances(c), situations: c => vSituations(c), commandes: c => vCommandes(c), pointage: c => vPointage(c),
-  journee: () => vJournee(), hubChantier: c => vHubChantier(c), hubTerrain: c => vHubTerrain(c), hubCoordination: c => vHubCoordination(c), hubGestion: c => vHubGestion(c), planning: c => vPlanning(c), securite: c => vSecurite(c), actions: c => vActions(c), reunions: c => vReunions(c), annuaire: c => vAnnuaire(c) };
+  journee: () => vJournee(), charge: () => vCharge(), preparation: c => vPreparation(c), bilan: c => vBilan(c), documents: c => vDocuments(c), devis: c => vDevis(c), hubChantier: c => vHubChantier(c), hubTerrain: c => vHubTerrain(c), hubCoordination: c => vHubCoordination(c), hubGestion: c => vHubGestion(c), planning: c => vPlanning(c), securite: c => vSecurite(c), actions: c => vActions(c), reunions: c => vReunions(c), annuaire: c => vAnnuaire(c) };
 
 function render() {
   if (!ch() && db.chantiers.length) ui.chantierId = db.chantiers[0].id;
@@ -200,6 +204,15 @@ function alertes(c, s) {
   if (phRetard.length && !pl.retard) out.push({ sev: 'warning', ic: 'chart-gantt', t: `${phRetard.length} phase(s) en retard sur le planning`, d: phRetard.slice(0, 3).map(r => `${esc(r.phase)} (${pc(r.pct)} pour ${pc(r.attendu)} attendu)`).join(' · '), go: 'planning' });
   const actRetard = actionsDe(db, c.id).filter(a => actionEnRetard(a, auj) && (a.origine || {}).type !== 'securite');
   if (actRetard.length) out.push({ sev: 'warning', ic: 'list-todo', t: `${actRetard.length} action(s) en retard`, d: actRetard.slice(0, 3).map(a => esc(a.libelle) + (a.responsable ? ` (${esc(a.responsable)})` : '')).join(' · '), go: 'actions' });
+  const imp = situationsImpayees(db, c.id, auj);
+  if (imp.length) out.push({ sev: 'serious', ic: 'banknote', t: `${imp.length} situation(s) impayée(s)`, d: `${fmtE(imp.reduce((t, x) => t + x.ttc, 0))} TTC échus — retard maximal ${Math.max(...imp.map(x => x.retard))} jour(s).`, go: 'devis' });
+  const dvr = devisARelancer(db, c.id, auj);
+  if (dvr.length) out.push({ sev: 'warning', ic: 'file-plus', t: `${dvr.length} devis à relancer`, d: dvr.slice(0, 3).map(d => `${esc(d.numero)} — ${esc(d.objet || '')}`).join(' · '), go: 'devis' });
+  const docA = documentsEnAttente(db, c.id, auj);
+  if (docA.length) out.push({ sev: 'warning', ic: 'folder-open', t: `${docA.length} document(s) en attente de visa depuis plus de 15 jours`, d: docA.slice(0, 3).map(d => esc(d.reference || d.titre)).join(' · '), go: 'documents' });
+  const prepR = etatPreparation(db, c.id, REF.preparation, auj).retard;
+  if (prepR.length) out.push({ sev: 'warning', ic: 'list-checks', t: `${prepR.length} étape(s) de préparation en retard`, d: prepR.slice(0, 2).map(i => esc(i.texte)).join(' · '), go: 'preparation' });
+  out.push(...alertesCharge(c));
   const semCourante = lundi(auj);
   if (s.rows.length && c.dateDebut && c.dateDebut <= auj && (!c.dateFin || c.dateFin >= semCourante)
       && !deCh(db.suivi).some(x => x.semaine === semCourante && x.pct !== null && x.pct !== undefined)) out.push({ sev: 'warning', ic: 'notebook-pen', t: 'Suivi de la semaine à renseigner', d: `Semaine ${semISO(semCourante)} : % d'avancement des phases non saisi.`, go: 'suivi' });
@@ -1211,7 +1224,7 @@ const ACT = {
     db.journal.push(...d.journal); db.reserves.push(...d.reserves); Object.assign(db.checklists, d.checklists);
     db.postes.push(...d.postes); db.situations.push(...d.situations); db.commandes.push(...d.commandes);
     db.compagnons.push(...d.compagnons); db.pointages.push(...d.pointages);
-    ['contacts', 'reunions', 'actions', 'securite'].forEach(k => db[k].push(...(d[k] || [])));
+    ['contacts', 'reunions', 'actions', 'securite', 'affectations', 'devis', 'documents'].forEach(k => { db[k] = db[k] || []; db[k].push(...(d[k] || [])); });
     ui.chantierId = d.chantier.id; ui.zone = null; ui.semaine = lundi(aujourdHui());
     save(); allerA('tableau'); toast('Démonstration chargée', 'succes');
   },
@@ -1277,7 +1290,7 @@ function insererOp(op) {
 
 function supprimerChantier(cid) {
   db.chantiers = db.chantiers.filter(c => c.id !== cid);
-  ['ops', 'suivi', 'taches', 'journal', 'reserves', 'postes', 'situations', 'commandes', 'compagnons', 'pointages', 'contacts', 'reunions', 'actions', 'securite', 'photos', 'pvs'].forEach(k => { db[k] = (db[k] || []).filter(x => x.chantierId !== cid); });
+  ['ops', 'suivi', 'taches', 'journal', 'reserves', 'postes', 'situations', 'commandes', 'compagnons', 'pointages', 'contacts', 'reunions', 'actions', 'securite', 'photos', 'pvs', 'devis', 'documents', 'affectations'].forEach(k => { db[k] = (db[k] || []).filter(x => x.chantierId !== cid); });
   delete db.checklists[cid];
   if (ui.chantierId === cid) ui.chantierId = db.chantiers[0] ? db.chantiers[0].id : null;
 }

@@ -191,7 +191,7 @@ function montantCommande(cmd) {
 
 function parametresFinanciers(c) {
   const f = (c && c.finances) || {};
-  return { rg: f.rg ?? 5, prorata: f.prorata ?? 0, tva: f.tva ?? 20 };
+  return { rg: f.rg ?? 5, prorata: f.prorata ?? 0, tva: f.tva ?? 20, delai: f.delai ?? 30 };
 }
 
 // Décomposition du marché (DPGF + avenants). Sans postes saisis : une ligne unique « Marché ».
@@ -504,4 +504,112 @@ function rappelsDus(base, maintenant = new Date()) {
     }
   });
   return out;
+}
+
+/* ============================= Plan de charge =============================
+   Besoin d'une semaine = heures restantes de chaque phase (budget × (1 − % réalisé))
+   réparties sur ses jours ouvrés restants (planning), ramenées en compagnons
+   (heures ÷ (heures par jour × 5)). */
+const clePersonne = k => norm(`${k.prenom || ''} ${k.nom || ''}`);
+function personnesEquipe(base) {
+  const m = new Map();
+  (base.compagnons || []).filter(k => k.actif !== false).forEach(k => {
+    const cle = clePersonne(k);
+    if (!cle) return;
+    if (!m.has(cle)) m.set(cle, { cle, nom: `${k.prenom || ''} ${k.nom || ''}`.trim(), qualification: k.qualification || '', interim: k.interim || '', chantiers: [] });
+    const p = m.get(cle);
+    if (!p.chantiers.includes(k.chantierId)) p.chantiers.push(k.chantierId);
+  });
+  return [...m.values()].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+}
+const idAffectation = (cle, semaine) => `af|${empreinte(cle)}|${semaine}`;
+const affectationDe = (base, cle, semaine) => (base.affectations || []).find(a => a.personne === cle && a.semaine === semaine) || null;
+
+function besoinEffectif(base, cid, lun, auj = aujourdHui()) {
+  const c = base.chantiers.find(x => x.id === cid);
+  if (!c) return 0;
+  const hj = hjDe(c), plan = c.planning || {};
+  const finSem = addDays(lun, 4);
+  let heures = 0;
+  calcSuivi(base, cid).rows.forEach(r => {
+    const p = plan[r.ouvrage + '||' + r.phase];
+    const reste = r.budget * (1 - r.pct);
+    if (!p || !p.debut || !p.fin || reste <= 0.01) return;
+    const debut = p.debut > auj ? p.debut : auj;
+    const fin = p.fin >= debut ? p.fin : ajouterJoursOuvres(debut, 5);   // phase en retard : reste à faire sur une semaine
+    const jours = joursOuvres(debut, fin);
+    if (!jours) return;
+    const d0 = debut > lun ? debut : lun, d1 = fin < finSem ? fin : finSem;
+    heures += reste / jours * joursOuvres(d0, d1);
+  });
+  return Math.round(heures / (hj * 5) * 10) / 10;
+}
+const affectesSemaine = (base, cid, lun) => (base.affectations || []).filter(a => a.chantierId === cid && a.semaine === lun && a.statut === 'chantier').length;
+
+/* ========================= Devis et relances clients ====================== */
+const STATUTS_DEVIS = [['brouillon', 'Brouillon'], ['emis', 'Émis'], ['accepte', 'Accepté'], ['refuse', 'Refusé']];
+const montantDevis = d => (d.lignes || []).length ? d.lignes.reduce((t, l) => t + num(l.quantite) * num(l.pu), 0) : num(d.montant);
+const derniereRelance = d => (d.relances || []).slice().sort().pop() || d.dateEmission || '';
+function devisARelancer(base, cid, auj = aujourdHui(), delai = 15) {
+  return (base.devis || []).filter(d => d.chantierId === cid && d.statut === 'emis' && derniereRelance(d) && derniereRelance(d) <= addDays(auj, -delai));
+}
+function echeanceSituation(s, c) {
+  const base = s.factureeLe || s.valideeLe || s.transmiseLe;
+  return base ? addDays(base, parametresFinanciers(c).delai) : '';
+}
+// Situations émises non payées dont l'échéance de paiement est dépassée
+function situationsImpayees(base, cid, auj = aujourdHui()) {
+  const c = base.chantiers.find(x => x.id === cid);
+  return situationsDe(base, cid).filter(s => ['transmise', 'validee', 'facturee'].includes(s.statut)).map(s => {
+    const ech = echeanceSituation(s, c);
+    return { sit: s, echeance: ech, retard: ech && ech < auj ? Math.round((new Date(auj) - new Date(ech)) / 86400000) : 0, ttc: calcSituation(base, cid, s.id).tot.ttc };
+  }).filter(x => x.retard > 0);
+}
+
+/* ====================== Préparation et documents ========================== */
+const STATUTS_PREP = [['afaire', 'À faire'], ['encours', 'En cours'], ['fait', 'Fait'], ['so', 'Sans objet']];
+function etatPreparation(base, cid, liste, auj = aujourdHui()) {
+  const st = ((base.checklists || {})[cid] || {}).prep || {};
+  const items = liste.flatMap((sec, si) => sec.items.map((t, ii) => Object.assign({ cle: si + '-' + ii, section: sec.section, texte: t, statut: 'afaire' }, st[si + '-' + ii] || {})));
+  const utiles = items.filter(i => i.statut !== 'so');
+  const faits = utiles.filter(i => i.statut === 'fait').length;
+  return { items, faits, total: utiles.length, pct: utiles.length ? faits / utiles.length : 0, retard: utiles.filter(i => i.statut !== 'fait' && i.echeance && i.echeance < auj) };
+}
+const STATUTS_DOC = [['encours', 'En cours'], ['diffuse', 'Diffusé'], ['vise', 'Visé sans observation'], ['vise_obs', 'Visé avec observations'], ['refuse', 'Refusé']];
+function documentsEnAttente(base, cid, auj = aujourdHui(), delai = 15) {
+  return (base.documents || []).filter(d => d.chantierId === cid && d.statut === 'diffuse' && d.diffuseLe && d.diffuseLe <= addDays(auj, -delai));
+}
+
+/* ========================== Bilan de fin de chantier ====================== */
+function bilanChantier(base, cid, auj = aujourdHui()) {
+  const c = base.chantiers.find(x => x.id === cid);
+  const hj = hjDe(c);
+  const s = calcSuivi(base, cid);
+  const f = calcFinances(base, cid);
+  const ops = (base.ops || []).filter(o => o.chantierId === cid);
+  const phases = s.rows.map(r => {
+    const principale = ops.filter(o => o.ouvrage === r.ouvrage && o.phase === r.phase && num(o.metre) > 0).sort((a, b) => num(b.metre) - num(a.metre))[0];
+    const cible = principale ? num(principale.cadence) : 0;
+    // Productivité de la phase = heures produites (budget × % réalisé) ÷ heures pointées ;
+    // cadence équivalente constatée = cadence du BTE × productivité
+    const productivite = r.heures > 0 && r.pct > 0 ? r.budget * r.pct / r.heures : 0;
+    return { ouvrage: r.ouvrage, phase: r.phase, budget: r.budget, heures: r.heures, pct: r.pct, ecart: r.ecartH, unite: principale ? principale.unite : '', operation: principale ? principale.operation : '', productivite, cadenceCible: cible, cadenceReelle: cible * productivite };
+  });
+  const pvRec = (base.pvs || []).filter(p => p.chantierId === cid && p.type === 'reception' && p.decision !== 'differee').sort((a, b) => a.date.localeCompare(b.date))[0];
+  const activite = [...(base.pointages || []).filter(p => p.chantierId === cid && p.date <= auj).map(p => p.date), ...(base.suivi || []).filter(x => x.chantierId === cid && num(x.heures) && x.semaine <= auj).map(x => addDays(x.semaine, 4) < auj ? addDays(x.semaine, 4) : auj)].sort();
+  const finReelle = pvRec ? pvRec.date : (activite[activite.length - 1] || '');
+  const res = (base.reserves || []).filter(r => r.chantierId === cid);
+  const levees = res.filter(r => r.statut === 'levée' && r.creeLe && r.leveeLe);
+  const secu = (base.securite || []).filter(x => x.chantierId === cid);
+  const intemp = new Set([...(base.journal || []).filter(j => j.chantierId === cid && j.intemperie).map(j => j.date), ...(base.pointages || []).filter(p => p.chantierId === cid && p.statut === 'intemperie').map(p => p.date)]);
+  return {
+    heures: { budget: s.tot.budget, reel: s.tot.heures + s.tot.horsBTE, ecart: s.tot.ecartH, ecartProj: s.tot.ecartProj, impact: s.tot.impact, pct: s.tot.pct, productivite: s.tot.heures > 0 ? s.tot.gagnees / s.tot.heures : 0 },
+    finances: { ca: f.ca, margePrevue: f.margePrevue, margeFin: f.margePFA, tauxPrevu: f.tauxMargePrevue, tauxFin: f.tauxMargePFA, facture: f.facture, encaisse: f.encaisseTTC, rg: f.rgCumul },
+    delai: { debut: c.dateDebut || '', finContrat: c.dateFin || '', finReelle, retard: c.dateFin && finReelle > c.dateFin ? joursOuvres(addDays(c.dateFin, 1), finReelle) : 0, reception: pvRec ? pvRec.date : '' },
+    liberationRG: pvRec ? addDays(pvRec.date, 365) : '',
+    qualite: { reserves: res.length, levees: levees.length, ouvertes: res.filter(r => r.statut !== 'levée').length, delaiMoyen: levees.length ? Math.round(levees.reduce((t, r) => t + (new Date(r.leveeLe) - new Date(r.creeLe)) / 86400000, 0) / levees.length) : 0 },
+    securite: { accidents: secu.filter(x => x.type === 'evenement' && /^Accident/.test(x.nature || '')).length, causeries: secu.filter(x => x.type === 'causerie').length, visites: secu.filter(x => x.type === 'visite').length },
+    joursIntemperie: intemp.size,
+    phases
+  };
 }

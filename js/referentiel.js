@@ -254,5 +254,48 @@ const REFERENTIEL = {
   ],
   typesEvenement: ["Accident avec arrêt", "Accident sans arrêt", "Presqu'accident", "Situation dangereuse", "Premiers soins"],
 
+  // Préparation de chantier : de la passation commerce → travaux à l'ouverture
+  preparation: [
+    { section: "Passation et lancement", items: [
+      "Passation commerce → travaux : marché, devis, BTE vendu, hypothèses de chiffrage",
+      "Réunion de lancement interne (chef de chantier, chargé d'affaires, bureau d'études)",
+      "Visite préalable du site (accès, supports, existants, contraintes)",
+      "Réunion de démarrage avec le maître d'œuvre / OPC"
+    ]},
+    { section: "Sécurité et autorisations", items: [
+      "PPSPS rédigé et transmis au CSPS",
+      "Inspection commune / plan de prévention (site occupé)",
+      "DICT / DT déposées si nécessaire",
+      "Autorisation d'occupation du domaine public / voirie",
+      "Plan d'installation de chantier (base vie, stockage, levage, accès)",
+      "Déclaration d'ouverture de chantier et affichage réglementaire"
+    ]},
+    { section: "Études et documents", items: [
+      "Plans d'exécution et carnet de détails établis",
+      "Visa du bureau de contrôle sur les plans et notes",
+      "Avis techniques et fiches techniques transmis au maître d'œuvre",
+      "Échantillons et coloris validés",
+      "Planning d'exécution établi et validé"
+    ]},
+    { section: "Moyens et approvisionnements", items: [
+      "Équipe affectée (plan de charge)",
+      "Moyens de levage réservés (grue, monte-matériaux)",
+      "Échafaudages et protections collectives commandés",
+      "Commandes des matériaux à délai long passées",
+      "Bennes, sanitaires et base vie organisés"
+    ]}
+  ],
+  typesDocuments: ["Plan d'exécution", "Carnet de détails", "Note de calcul", "Fiche technique", "Avis technique", "PV d'essai", "Échantillon", "Notice d'entretien", "Garantie / attestation", "Autre"],
+  // Clôture du chantier (bilan)
+  cloture: [
+    "Réserves levées et PV de levée signé",
+    "DOE transmis au maître d'œuvre",
+    "Décompte général définitif (DGD) établi",
+    "Matériel et installations repliés",
+    "Bilan financier validé avec la direction",
+    "Retour d'expérience partagé avec l'équipe",
+    "Dossier archivé"
+  ],
+
   meteo: ["Beau", "Nuageux", "Pluie", "Vent fort", "Gel", "Neige", "Orage", "Canicule"]
 };

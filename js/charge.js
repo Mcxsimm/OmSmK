@@ -29,7 +29,7 @@ function alertesCharge(c) {
   if (!personnesEquipe(db).length || !Object.keys(c.planning || {}).length) return out;
   [lundi(aujourdHui()), addDays(lundi(aujourdHui()), 7)].forEach(s => {
     const besoin = besoinEffectif(db, c.id, s), aff = affectesSemaine(db, c.id, s);
-    if (besoin >= 0.5 && aff + 0.5 <= besoin && !out.length) out.push({ sev: 'warning', ic: 'users', t: `Effectif insuffisant en semaine ${semISO(s)}`, d: `${aff} compagnon(s) affecté(s) pour un besoin de ${fmt(besoin, 1)} d'après le planning.`, go: 'charge' });
+    if (besoin >= 0.5 && aff + 0.5 <= besoin && !out.length) out.push({ sev: 'warning', ic: 'users', t: `Effectif insuffisant en semaine ${semISO(s)}`, d: `${accord(aff, 'compagnon(s) affecté(s)')} pour un besoin de ${fmt(besoin, 1)} d'après le planning.`, go: 'charge' });
   });
   return out;
 }
@@ -38,7 +38,7 @@ function vCharge() {
   const sems = semainesCharge();
   const pers = personnesEquipe(db);
   const chs = chantiersCharge();
-  const entete = enTetePage({ eyebrow: 'Organisation des équipes', titre: 'Plan de charge', sous: [sousInfo('users', `${pers.length} personne(s)`), sousInfo('building-2', `${chs.length} chantier(s)`)],
+  const entete = enTetePage({ eyebrow: 'Organisation des équipes', titre: 'Plan de charge', sous: [sousInfo('users', `${accord(pers.length, 'personne(s)')}`), sousInfo('building-2', `${accord(chs.length, 'chantier(s)')}`)],
     actions: `<div class="btn-group"><button class="btn icon" data-act="chargeNav" data-d="-7" aria-label="Semaines précédentes">${icone('chevron-left')}</button><button class="btn" data-act="chargeNav" data-d="0">Cette semaine</button><button class="btn icon" data-act="chargeNav" data-d="7" aria-label="Semaines suivantes">${icone('chevron-right')}</button></div>` });
   if (!pers.length) return entete + `<div class="card">${vide('users', 'Aucune équipe enregistrée', 'Le plan de charge réunit les compagnons de tous vos chantiers. Constituez d\'abord l\'équipe de chaque chantier depuis le pointage journalier.', `<button class="btn primary" data-act="espace" data-e="terrain">${icone('hard-hat')}Aller au terrain</button>`)}</div>`;
   const auj = lundi(aujourdHui());
@@ -47,7 +47,7 @@ function vCharge() {
   const lignesCh = chs.map(c => `<tr class="charge-ch"><td><div class="strong">${esc(c.nom)}</div><div class="sub">${Object.keys(c.planning || {}).length ? 'besoin d\'après le planning' : 'planning non établi'}</div></td>${sems.map(s => {
       const b = besoinEffectif(db, c.id, s), a = affectesSemaine(db, c.id, s);
       const manque = b >= 0.5 && a + 0.5 <= b, exces = a > 0 && a >= b + 1.5;
-      return `<td class="num ${s === auj ? 'pt-auj' : ''}"><span class="charge-jauge ${manque ? 'manque' : exces ? 'exces' : a || b ? 'ok' : ''}" title="${a} affecté(s) · besoin ${fmt(b, 1)}">${a}<small>/${b ? fmt(b, 1) : '0'}</small></span>${manque ? `<div class="xs neg">${icone('triangle-alert', 'sm')}manque ${fmt(b - a, 1)}</div>` : ''}</td>`;
+      return `<td class="num ${s === auj ? 'pt-auj' : ''}"><span class="charge-jauge ${manque ? 'manque' : exces ? 'exces' : a || b ? 'ok' : ''}" title="${accord(a, 'affecté(s)')} · besoin ${fmt(b, 1)}">${a}<small>/${b ? fmt(b, 1) : '0'}</small></span>${manque ? `<div class="xs neg">${icone('triangle-alert', 'sm')}manque ${fmt(b - a, 1)}</div>` : ''}</td>`;
     }).join('')}</tr>`).join('');
   const opts = (valeur) => `<option value="">—</option>${chs.map(c => `<option value="${esc(c.id)}" ${valeur === c.id ? 'selected' : ''}>${esc(codeChantier(c))}</option>`).join('')}<optgroup label="Absence">${Object.entries(STATUTS_AFFECT).filter(([k]) => k !== 'dispo').map(([k, [l]]) => `<option value="${k}" ${valeur === k ? 'selected' : ''}>${l}</option>`).join('')}</optgroup>`;
   const lignesP = pers.map(p => `<tr><td><div class="row" style="gap:10px;flex-wrap:nowrap"><span class="avatar">${initiales(p.nom)}</span><div><div class="strong">${esc(p.nom)}</div><div class="sub">${esc([p.qualification, p.interim].filter(Boolean).join(' · '))}</div></div></div></td>${sems.map(s => {
@@ -81,7 +81,7 @@ Object.assign(ACT, {
       const a = affectationDe(db, p.cle, prec);
       if (a && !affectationDe(db, p.cle, s)) { majAffectation(p, s, a.statut === 'chantier' ? a.chantierId : a.statut); n++; }
     });
-    save(); render(); toast(n ? `${n} affectation(s) reprise(s) en semaine ${semISO(s)}` : 'Rien à reprendre', n ? 'succes' : 'info');
+    save(); render(); toast(n ? `${accord(n, 'affectation(s) reprise(s)')} en semaine ${semISO(s)}` : 'Rien à reprendre', n ? 'succes' : 'info');
   }
 });
 Object.assign(CHG, {

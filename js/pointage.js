@@ -100,11 +100,11 @@ function vPointageJour(c, date) {
 
   const kpis = `<div class="kpis">
     <div class="card kpi"><div class="kpi-top"><span class="kpi-lbl">Effectif présent</span><span class="kpi-ico">${icone('hard-hat')}</span></div>
-      <div class="kpi-val">${presents}<small>/ ${comps.length}</small></div><div class="kpi-sub">${nonPointes ? `${nonPointes} compagnon(s) non pointé(s)` : 'Tout le monde est pointé'}</div></div>
+      <div class="kpi-val">${presents}<small>/ ${comps.length}</small></div><div class="kpi-sub">${nonPointes ? `${accord(nonPointes, 'compagnon(s) non pointé(s)')}` : 'Tout le monde est pointé'}</div></div>
     <div class="card kpi"><div class="kpi-top"><span class="kpi-lbl">Heures du jour</span><span class="kpi-ico">${icone('clock')}</span></div>
-      <div class="kpi-val">${fmt(jour.tot.heures)}<small>h</small></div><div class="kpi-sub">${jour.tot.intemp ? `+ ${fmt(jour.tot.intemp)} h d'intempéries` : `${jour.tot.paniers} panier(s)`}</div></div>
+      <div class="kpi-val">${fmt(jour.tot.heures)}<small>h</small></div><div class="kpi-sub">${jour.tot.intemp ? `+ ${fmt(jour.tot.intemp)} h d'intempéries` : `${accord(jour.tot.paniers, 'panier(s)')}`}</div></div>
     <div class="card kpi"><div class="kpi-top"><span class="kpi-lbl">Semaine ${semISO(date)}</span><span class="kpi-ico">${icone('calendar')}</span></div>
-      <div class="kpi-val">${fmt(sem.tot.heures)}<small>h</small></div><div class="kpi-sub">${fmt(sem.tot.heures / hjDe(c), 1)} jour(s)-homme${sem.tot.intemp ? ` · ${fmt(sem.tot.intemp)} h intempéries` : ''}</div></div>
+      <div class="kpi-val">${fmt(sem.tot.heures)}<small>h</small></div><div class="kpi-sub">${accord(fmt(sem.tot.heures / hjDe(c), 1), 'jour(s)-homme')}${sem.tot.intemp ? ` · ${fmt(sem.tot.intemp)} h intempéries` : ''}</div></div>
     <div class="card kpi"><div class="kpi-top"><span class="kpi-lbl">Budget d'heures consommé</span><span class="kpi-ico">${icone('gauge')}</span></div>
       <div class="kpi-val">${fmt(consomme, 0)}<small>/ ${fmt(suivi.tot.budget, 0)} h</small></div>
       <div style="margin-top:10px">${barre(suivi.tot.budget ? consomme / suivi.tot.budget : 0, 'lg')}</div>
@@ -126,7 +126,7 @@ function vPointageJour(c, date) {
     <div class="pt-list">
       <div class="pt-row pt-head"><span>Compagnon</span><span>Statut</span><span class="num">Heures</span><span>Phase du BTE</span><span class="num">Intemp.</span><span>Panier</span><span></span></div>
       ${lignes}
-      <div class="pt-row pt-total"><span>Total du jour</span><span>${presents} présent(s)</span><span class="num">${fmt(jour.tot.heures)} h</span><span></span><span class="num">${jour.tot.intemp ? fmt(jour.tot.intemp) + ' h' : ''}</span><span>${jour.tot.paniers || ''}</span><span></span></div>
+      <div class="pt-row pt-total"><span>Total du jour</span><span>${accord(presents, 'présent(s)')}</span><span class="num">${fmt(jour.tot.heures)} h</span><span></span><span class="num">${jour.tot.intemp ? fmt(jour.tot.intemp) + ' h' : ''}</span><span>${jour.tot.paniers || ''}</span><span></span></div>
     </div>
     <div class="card-foot small muted">${icone('info', 'sm')} Les heures pointées s'ajoutent automatiquement au suivi hebdomadaire de la phase choisie. Pour répartir une journée sur plusieurs phases, utilisez ${icone('layers', 'sm')}.</div>
   </div>`;
@@ -236,7 +236,7 @@ function vPointageSemaine(c, lun) {
       }).join('')}</tbody></table></div>` : `<div class="card-body"><p class="muted">Aucune heure pointée cette semaine.</p></div>`}
     <div class="card-foot row"><span class="small muted">Les heures saisies manuellement dans le suivi s'ajoutent au pointage (intérim facturé à l'heure, régularisations…).</span><span class="grow"></span><button class="btn ghost sm" data-act="ptVersSuivi">Ouvrir le suivi S${semISO(lun)} ${icone('chevron-right', 'sm')}</button></div></div>`;
   const kpis = `<div class="card mini-stats">
-    <div><div class="ms-lbl">${icone('clock', 'sm')}Heures travaillées</div><div class="ms-val">${fmt(syn.tot.heures)} h</div><div class="xs muted">${fmt(syn.tot.heures / hjDe(c), 1)} jour(s)-homme</div></div>
+    <div><div class="ms-lbl">${icone('clock', 'sm')}Heures travaillées</div><div class="ms-val">${fmt(syn.tot.heures)} h</div><div class="xs muted">${accord(fmt(syn.tot.heures / hjDe(c), 1), 'jour(s)-homme')}</div></div>
     <div><div class="ms-lbl">${icone('cloud-rain', 'sm')}Intempéries</div><div class="ms-val">${fmt(syn.tot.intemp)} h</div><div class="xs muted">à déclarer à la caisse CIBTP</div></div>
     <div><div class="ms-lbl">${icone('banknote', 'sm')}Paniers</div><div class="ms-val">${syn.tot.paniers}</div><div class="xs muted">indemnités repas</div></div>
     <div><div class="ms-lbl">${icone('user', 'sm')}Absences</div><div class="ms-val">${syn.tot.absences} j</div><div class="xs muted">congés, maladie, formation…</div></div></div>`;
@@ -257,7 +257,7 @@ function modalEquipePt() {
     ${autres.length ? `<div class="row" style="margin-top:16px;gap:8px">${selectHTML('ptSource', 'Reprendre l\'équipe d\'un autre chantier', autres.map(x => [x.id, `${x.nom} (${compagnonsDe(x.id).length})`]), autres[0].id)}
       <button class="btn" style="align-self:flex-end;margin-bottom:14px" data-act="ptImporterEquipe">${icone('copy')}Reprendre</button></div>` : ''}`,
     `<button class="btn" data-act="fermerModal">Fermer</button><button class="btn primary" data-act="ptCompagnon">${icone('plus')}Ajouter un compagnon</button>`,
-    { icone: 'users', sousTitre: `${compagnonsDe(c.id).length} compagnon(s) actif(s) sur ${esc(c.nom)}` });
+    { icone: 'users', sousTitre: `${accord(compagnonsDe(c.id).length, 'compagnon(s) actif(s)')} sur ${esc(c.nom)}` });
 }
 
 function modalCompagnon(k) {
@@ -337,7 +337,7 @@ Object.assign(ACT, {
     const kid = el.dataset.k;
     const n = (db.pointages || []).filter(p => p.compagnonId === kid).length;
     if (n) {
-      if (!await confirmer('Compagnon déjà pointé', `${n} pointage(s) existent pour ce compagnon : il est passé en <b>inactif</b> pour conserver l'historique des heures.`, { ok: 'Passer en inactif', icone: 'hard-hat' })) return modalEquipePt();
+      if (!await confirmer('Compagnon déjà pointé', `${accord(n, 'pointage(s)')} existent pour ce compagnon : il est passé en <b>inactif</b> pour conserver l'historique des heures.`, { ok: 'Passer en inactif', icone: 'hard-hat' })) return modalEquipePt();
       db.compagnons.find(k => k.id === kid).actif = false;
     } else {
       if (!await confirmer('Supprimer le compagnon', 'Ce compagnon sera retiré de l\'équipe.', { ok: 'Supprimer', danger: true })) return modalEquipePt();
@@ -352,13 +352,13 @@ Object.assign(ACT, {
       .map(k => ({ id: uid(), chantierId: ui.chantierId, nom: k.nom, prenom: k.prenom, qualification: k.qualification, matricule: k.matricule, interim: k.interim, actif: true }));
     db.compagnons.push(...nouveaux);
     save(); render(); modalEquipePt();
-    toast(nouveaux.length ? `${nouveaux.length} compagnon(s) ajouté(s)` : 'Toute l\'équipe est déjà présente', nouveaux.length ? 'succes' : 'info');
+    toast(nouveaux.length ? `${accord(nouveaux.length, 'compagnon(s) ajouté(s)')}` : 'Toute l\'équipe est déjà présente', nouveaux.length ? 'succes' : 'info');
   },
   ptTous: () => {
     const c = ch(), date = datePt();
     let n = 0;
     compagnonsDe(c.id).forEach(k => { if (!pointageDe(c.id, date, k.id)) { majPointage(k.id, date, champsStatut(c, 'present', k.id)); n++; } });
-    render(); toast(`${n} compagnon(s) pointé(s) présent(s)`, 'succes');
+    render(); toast(`${accord(n, 'compagnon(s) pointé(s) présent(s)')}`, 'succes');
   },
   ptCopier: () => {
     const c = ch(), date = datePt();
@@ -372,7 +372,7 @@ Object.assign(ACT, {
       majPointage(p.compagnonId, date, { statut: p.statut, lignes: (p.lignes || []).map(l => Object.assign({}, l)), intemp: p.statut === 'intemperie' ? num(p.intemp) : 0, panier: !!p.panier, obs: '' });
       n++;
     });
-    render(); toast(n ? `Pointage du ${fmtDate(veille)} repris pour ${n} compagnon(s)` : 'Tous les compagnons sont déjà pointés', n ? 'succes' : 'info');
+    render(); toast(n ? `Pointage du ${fmtDate(veille)} repris pour ${accord(n, 'compagnon(s)')}` : 'Tous les compagnons sont déjà pointés', n ? 'succes' : 'info');
   },
   ptAppliquer: () => {
     const c = ch(), date = datePt(), cle = phaseParDefaut(c);
@@ -381,7 +381,7 @@ Object.assign(ACT, {
       if (p.statut !== 'present' || (p.lignes || []).length > 1) return;
       majPointage(p.compagnonId, date, { lignes: [ligneDepuisCle(cle, heuresPointage(p) || hjDe(c))] }); n++;
     });
-    render(); toast(`${n} compagnon(s) affecté(s) à ${libPhase(...cle.split('||'))}`, 'succes');
+    render(); toast(`${accord(n, 'compagnon(s) affecté(s)')} à ${libPhase(...cle.split('||'))}`, 'succes');
   },
   ptVentiler: el => modalVentilation(el.dataset.k),
   vAjout: () => { lireLignesPt(); const c = ch(); const reste = Math.max(0, hjDe(c) - _ptLignes.reduce((t, l) => t + num(l.h), 0)); _ptLignes.push(ligneDepuisCle(phaseParDefaut(c), reste)); renderLignesPt(); },

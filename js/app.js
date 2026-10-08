@@ -225,11 +225,11 @@ function alertes(c, s) {
     else if (r.heures > r.budget && r.budget > 0) out.push({ sev: 'serious', ic: 'clock', t: nom, d: `Heures pointées (${fmt(r.heures)} h) supérieures au budget (${fmt(r.budget)} h).` });
   });
   const enRetard = deCh(db.reserves).filter(r => r.statut !== 'levée' && r.echeance && r.echeance < auj);
-  if (enRetard.length) out.push({ sev: 'critical', ic: 'shield-check', t: `${enRetard.length} réserve(s) en retard`, d: `Échéance de levée dépassée — ${enRetard.slice(0, 3).map(numeroReserve).join(', ')}${enRetard.length > 3 ? '…' : ''}.`, go: 'qualite' });
+  if (enRetard.length) out.push({ sev: 'critical', ic: 'shield-check', t: `${accord(enRetard.length, 'réserve(s)')} en retard`, d: `Échéance de levée dépassée — ${enRetard.slice(0, 3).map(numeroReserve).join(', ')}${enRetard.length > 3 ? '…' : ''}.`, go: 'qualite' });
   const theo = avancementTheorique(c);
   if (theo !== null && s.rows.length && s.tot.pct + 0.1 < theo) out.push({ sev: 'warning', ic: 'calendar', t: 'Avancement en retard sur le planning', d: `${pc(s.tot.pct)} réalisé pour ${pc(theo)} de délai écoulé.` });
   const cmdRetard = (db.commandes || []).filter(x => x.chantierId === c.id && commandeEngagee(x) && !commandeLivree(x) && x.livraisonPrevue && x.livraisonPrevue < auj);
-  if (cmdRetard.length) out.push({ sev: 'serious', ic: 'truck', t: `${cmdRetard.length} livraison(s) en retard`, d: cmdRetard.slice(0, 3).map(x => `${esc(x.numero)} — ${esc(x.fournisseur)}`).join(' · '), go: 'commandes' });
+  if (cmdRetard.length) out.push({ sev: 'serious', ic: 'truck', t: `${accord(cmdRetard.length, 'livraison(s)')} en retard`, d: cmdRetard.slice(0, 3).map(x => `${esc(x.numero)} — ${esc(x.fournisseur)}`).join(' · '), go: 'commandes' });
   const fi = calcFinances(db, c.id);
   if (fi.ca && fi.avFinancier + 0.1 < fi.avPhysique) out.push({ sev: 'warning', ic: 'receipt', t: 'Retard de facturation', d: `${pc(fi.avPhysique - fi.avFinancier)} d'avancement non facturé (≈ ${fmtE((fi.avPhysique - fi.avFinancier) * fi.ca)}).`, go: 'situations' });
   if (fi.ca && c.dateDebut && c.dateDebut <= auj && !situationsDe(db, c.id).some(x => x.mois === auj.slice(0, 7)) && fi.avFinancier < 1) out.push({ sev: 'warning', ic: 'file-plus', t: 'Situation du mois à établir', d: `Aucune situation pour ${new Date(auj + 'T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}.`, go: 'situations' });
@@ -238,22 +238,22 @@ function alertes(c, s) {
     let veille = addDays(auj, -1);
     while ([0, 6].includes(new Date(veille + 'T00:00:00').getDay())) veille = addDays(veille, -1);
     const manquants = veille >= c.dateDebut ? equipePt.filter(k => !(db.pointages || []).some(p => p.chantierId === c.id && p.date === veille && p.compagnonId === k.id)) : [];
-    if (manquants.length) out.push({ sev: 'warning', ic: 'clock', t: `Pointage du ${fmtDate(veille)} incomplet`, d: `${manquants.length} compagnon(s) non pointé(s) : ${manquants.slice(0, 3).map(k => esc(`${k.prenom || ''} ${k.nom || ''}`.trim())).join(', ')}${manquants.length > 3 ? '…' : ''}.`, go: 'pointage', date: veille });
+    if (manquants.length) out.push({ sev: 'warning', ic: 'clock', t: `Pointage du ${fmtDate(veille)} incomplet`, d: `${accord(manquants.length, 'compagnon(s) non pointé(s)')} : ${manquants.slice(0, 3).map(k => esc(`${k.prenom || ''} ${k.nom || ''}`.trim())).join(', ')}${manquants.length > 3 ? '…' : ''}.`, go: 'pointage', date: veille });
   }
   const pl = calcPlanning(db, c.id, auj);
-  if (pl.retard) out.push({ sev: 'serious', ic: 'chart-gantt', t: `Délai : ${pl.retard} jour(s) de retard projeté`, d: `Fin projetée le ${fmtDate(pl.finProjetee)} pour une fin contractuelle le ${fmtDate(pl.finContrat)}.`, go: 'planning' });
+  if (pl.retard) out.push({ sev: 'serious', ic: 'chart-gantt', t: `Délai : ${accord(pl.retard, 'jour(s)')} de retard projeté`, d: `Fin projetée le ${fmtDate(pl.finProjetee)} pour une fin contractuelle le ${fmtDate(pl.finContrat)}.`, go: 'planning' });
   const phRetard = pl.rows.filter(r => r.statut === 'retard');
-  if (phRetard.length && !pl.retard) out.push({ sev: 'warning', ic: 'chart-gantt', t: `${phRetard.length} phase(s) en retard sur le planning`, d: phRetard.slice(0, 3).map(r => `${esc(r.phase)} (${pc(r.pct)} pour ${pc(r.attendu)} attendu)`).join(' · '), go: 'planning' });
+  if (phRetard.length && !pl.retard) out.push({ sev: 'warning', ic: 'chart-gantt', t: `${accord(phRetard.length, 'phase(s)')} en retard sur le planning`, d: phRetard.slice(0, 3).map(r => `${esc(r.phase)} (${pc(r.pct)} pour ${pc(r.attendu)} attendu)`).join(' · '), go: 'planning' });
   const actRetard = actionsDe(db, c.id).filter(a => actionEnRetard(a, auj) && (a.origine || {}).type !== 'securite');
-  if (actRetard.length) out.push({ sev: 'warning', ic: 'list-todo', t: `${actRetard.length} action(s) en retard`, d: actRetard.slice(0, 3).map(a => esc(a.libelle) + (a.responsable ? ` (${esc(a.responsable)})` : '')).join(' · '), go: 'actions' });
+  if (actRetard.length) out.push({ sev: 'warning', ic: 'list-todo', t: `${accord(actRetard.length, 'action(s)')} en retard`, d: actRetard.slice(0, 3).map(a => esc(a.libelle) + (a.responsable ? ` (${esc(a.responsable)})` : '')).join(' · '), go: 'actions' });
   const imp = situationsImpayees(db, c.id, auj);
-  if (imp.length) out.push({ sev: 'serious', ic: 'banknote', t: `${imp.length} situation(s) impayée(s)`, d: `${fmtE(imp.reduce((t, x) => t + x.ttc, 0))} TTC échus — retard maximal ${Math.max(...imp.map(x => x.retard))} jour(s).`, go: 'devis' });
+  if (imp.length) out.push({ sev: 'serious', ic: 'banknote', t: `${accord(imp.length, 'situation(s) impayée(s)')}`, d: `${fmtE(imp.reduce((t, x) => t + x.ttc, 0))} TTC échus — retard maximal ${accord(Math.max(...imp.map(x => x.retard)), 'jour(s)')}.`, go: 'devis' });
   const dvr = devisARelancer(db, c.id, auj);
   if (dvr.length) out.push({ sev: 'warning', ic: 'file-plus', t: `${dvr.length} devis à relancer`, d: dvr.slice(0, 3).map(d => `${esc(d.numero)} — ${esc(d.objet || '')}`).join(' · '), go: 'devis' });
   const docA = documentsEnAttente(db, c.id, auj);
-  if (docA.length) out.push({ sev: 'warning', ic: 'folder-open', t: `${docA.length} document(s) en attente de visa depuis plus de 15 jours`, d: docA.slice(0, 3).map(d => esc(d.reference || d.titre)).join(' · '), go: 'documents' });
+  if (docA.length) out.push({ sev: 'warning', ic: 'folder-open', t: `${accord(docA.length, 'document(s)')} en attente de visa depuis plus de 15 jours`, d: docA.slice(0, 3).map(d => esc(d.reference || d.titre)).join(' · '), go: 'documents' });
   const prepR = etatPreparation(db, c.id, REF.preparation, auj).retard;
-  if (prepR.length) out.push({ sev: 'warning', ic: 'list-checks', t: `${prepR.length} étape(s) de préparation en retard`, d: prepR.slice(0, 2).map(i => esc(i.texte)).join(' · '), go: 'preparation' });
+  if (prepR.length) out.push({ sev: 'warning', ic: 'list-checks', t: `${accord(prepR.length, 'étape(s)')} de préparation en retard`, d: prepR.slice(0, 2).map(i => esc(i.texte)).join(' · '), go: 'preparation' });
   out.push(...alertesCharge(c));
   const semCourante = lundi(auj);
   if (s.rows.length && c.dateDebut && c.dateDebut <= auj && (!c.dateFin || c.dateFin >= semCourante)
@@ -326,7 +326,7 @@ function vTableau(c) {
 
   const ecarts = `<div class="card"><div class="card-head"><h3>Écart d'heures par phase</h3><span class="hint">gain à droite · dépassement à gauche</span></div>
     <div class="card-body">${graphique('ecarts', w => barresEcarts(s.rows, w))}</div>
-    <div class="card-foot row"><span class="small muted">${s.rows.length} phase(s) · taux horaire ${fmtE(s.taux)}/h</span><span class="grow"></span><button class="btn ghost sm" data-nav="suivi">Détail par semaine ${icone('chevron-right', 'sm')}</button></div></div>`;
+    <div class="card-foot row"><span class="small muted">${accord(s.rows.length, 'phase(s)')} · taux horaire ${fmtE(s.taux)}/h</span><span class="grow"></span><button class="btn ghost sm" data-nav="suivi">Détail par semaine ${icone('chevron-right', 'sm')}</button></div></div>`;
 
   const flux = `<div class="card"><div class="card-head"><h3>Activité récente</h3></div>
     ${act.length ? `<ul class="feed">${act.map(e => `<li><span class="f-ico ${e.c}">${icone(e.ic, 'sm')}</span><div class="f-txt"><div>${e.h}</div><div class="f-date">${depuis(e.d)}${e.s ? ' · ' + esc(e.s) : ''}</div></div></li>`).join('')}</ul>`
@@ -336,7 +336,7 @@ function vTableau(c) {
     <div><div class="ms-lbl">${icone('gauge', 'sm')}Productivité</div><div class="ms-val ${indice === null ? '' : cls(indice - 1)}">${indice === null ? '—' : fmt(indice, 2)}</div><div class="xs muted">h produites / h pointées</div></div>
     ${pageActive('terrain') ? `<div><div class="ms-lbl">${icone('clipboard-check', 'sm')}Terrain</div><div class="ms-val">${pc(t.pct)}</div><div class="xs muted">${t.faites} / ${t.total} tâches</div></div>` : ''}
     <div><div class="ms-lbl">${icone('shield-check', 'sm')}Réserves ouvertes</div><div class="ms-val ${ouvertes ? 'neg' : ''}">${ouvertes}</div><div class="xs muted">${res.length} au total</div></div>
-    <div><div class="ms-lbl">${icone('cloud-rain', 'sm')}Intempéries</div><div class="ms-val">${jIntemp}</div><div class="xs muted">jour(s) déclarés</div></div>
+    <div><div class="ms-lbl">${icone('cloud-rain', 'sm')}Intempéries</div><div class="ms-val">${jIntemp}</div><div class="xs muted">${pluriel(jIntemp, 'jour(s) déclaré(s)')}</div></div>
   </div>`;
 
   const phases = `<div class="card"><div class="card-head"><h3>Avancement par phase</h3></div>${s.rows.map(r => `<div class="phase">
@@ -543,7 +543,7 @@ function vBTE(c) {
   const equipe = Math.max(1, num(ui.equipe) || 1);
   const jours = tH / (hj * equipe);
   const partMO = num(c.marcheHT) ? tB / num(c.marcheHT) : 0;
-  const entete = enTetePage({ eyebrow: 'Budget technique d\'exécution', titre: 'Main d\'œuvre par opération', sous: [sousInfo('layers', `${ops.length} opérations`), sousInfo('building-2', `${new Set(ops.map(o => o.ouvrage)).size} ouvrage(s)`)],
+  const entete = enTetePage({ eyebrow: 'Budget technique d\'exécution', titre: 'Main d\'œuvre par opération', sous: [sousInfo('layers', `${ops.length} opérations`), sousInfo('building-2', `${accord(new Set(ops.map(o => o.ouvrage)).size, 'ouvrage(s)')}`)],
     actions: `<button class="btn" data-act="importFichier">${icone('upload')}Importer</button><button class="btn" data-act="biblio">${icone('book-open')}Cadences standard</button><button class="btn primary" data-act="opNew">${icone('plus')}Opération</button>` });
 
   return entete + `<div class="stack">
@@ -552,7 +552,7 @@ function vBTE(c) {
       <div class="card kpi"><div class="kpi-top"><span class="kpi-lbl">Budget main d'œuvre</span><span class="kpi-ico">${icone('calculator')}</span></div><div class="kpi-val">${fmtE(tB)}</div><div class="kpi-sub">${partMO ? pc(partMO) + ' du marché' : 'taux ' + fmtE(taux) + '/h'}</div></div>
       <div class="card kpi"><div class="kpi-top"><span class="kpi-lbl">Gain / perte vs devis</span><span class="kpi-ico">${icone('activity')}</span></div><div class="kpi-val ${tD ? cls(tD - tB) : ''}">${tD ? signeE(tD - tB) : '—'}</div><div class="kpi-sub">${tD ? `devis MO ${fmtE(tD)} · ${delta((tD - tB) / tD * 100, ' %', 1)}` : 'renseignez le devis par opération'}</div></div>
       <div class="card kpi"><div class="kpi-top"><span class="kpi-lbl">Durée indicative</span><span class="kpi-ico">${icone('calendar')}</span></div><div class="kpi-val">${fmt(jours, 1)}<small> jours</small></div>
-        <div class="kpi-sub">avec <input class="input" type="number" min="1" style="width:56px;height:26px;padding:0 6px;display:inline-block" value="${equipe}" data-change="equipe" aria-label="Nombre de compagnons"> compagnon(s) · ${fmt(jours / 5, 1)} sem.</div></div>
+        <div class="kpi-sub">avec <input class="input" type="number" min="1" style="width:56px;height:26px;padding:0 6px;display:inline-block" value="${equipe}" data-change="equipe" aria-label="Nombre de compagnons"> ${pluriel(equipe, 'compagnon(s)')} · ${fmt(jours / 5, 1)} sem.</div></div>
     </div>
     <div class="card">
       <div class="card-head"><div class="row" style="gap:16px">
@@ -577,12 +577,12 @@ function vJournal(c) {
   const eff = js.filter(j => num(j.effectif));
   const phs = photosDe(c.id);
   const onglet = ui.journalTab === 'photos' ? 'photos' : 'journal';
-  const entete = enTetePage({ eyebrow: 'Journal de chantier', titre: onglet === 'photos' ? 'Photos du chantier' : 'Main courante', sous: [sousInfo('notebook-pen', `${js.length} entrée(s)`), sousInfo('camera', `${phs.length} photo(s)`)],
+  const entete = enTetePage({ eyebrow: 'Journal de chantier', titre: onglet === 'photos' ? 'Photos du chantier' : 'Main courante', sous: [sousInfo('notebook-pen', `${accord(js.length, 'entrée(s)')}`), sousInfo('camera', `${accord(phs.length, 'photo(s)')}`)],
     actions: `<label class="btn">${icone('camera')}Photos<input type="file" accept="image/*" multiple hidden data-change="photosGalerie"></label><button class="btn primary" data-act="journalNew">${icone('plus')}Nouvelle entrée</button>` });
   const seg = `<div class="seg" style="margin-bottom:16px"><button class="${onglet === 'journal' ? 'on' : ''}" data-act="journalTab" data-t="journal">${icone('notebook-pen', 'sm')}Main courante <span class="n">${js.length}</span></button><button class="${onglet === 'photos' ? 'on' : ''}" data-act="journalTab" data-t="photos">${icone('image', 'sm')}Photos <span class="n">${phs.length}</span></button></div>`;
   if (onglet === 'photos') {
     const jours = [...new Set(phs.map(p => p.date))];
-    return entete + seg + (phs.length ? `<div class="stack">${jours.map(d => `<div class="card"><div class="card-head"><h3>${fmtDate(d, true)}</h3><span class="hint">${phs.filter(p => p.date === d).length} photo(s)</span></div>
+    return entete + seg + (phs.length ? `<div class="stack">${jours.map(d => `<div class="card"><div class="card-head"><h3>${fmtDate(d, true)}</h3><span class="hint">${accord(phs.filter(p => p.date === d).length, 'photo(s)')}</span></div>
       <div class="card-body">${vignettesPhotos(phs.filter(p => p.date === d), { legende: true })}</div></div>`).join('')}</div>`
       : `<div class="card">${vide('camera', 'Aucune photo', 'Prenez des photos depuis le téléphone : avancement, points singuliers, réserves, livraisons. Elles restent disponibles hors-ligne et sont partagées avec l\'équipe.',
         `<label class="btn primary">${icone('camera')}Prendre des photos<input type="file" accept="image/*" multiple hidden data-change="photosGalerie"></label>`)}</div>`);
@@ -599,7 +599,7 @@ function vJournal(c) {
         ${j.meteo ? `<span class="badge">${esc(j.meteo)}</span>` : ''}${j.intemperie ? `<span class="badge warn">${icone('cloud-rain')}Intempérie</span>` : ''}
         ${num(j.effectif) ? `<span class="badge brand">${icone('users')}${num(j.effectif)}</span>` : ''}${num(j.heures) ? `<span class="badge">${icone('timer')}${fmt(j.heures)} h</span>` : ''}</div>
         <div><button class="btn ghost icon sm" data-act="journalEdit" data-id="${esc(j.id)}" aria-label="Modifier">${icone('pencil', 'sm')}</button><button class="btn ghost icon sm" data-act="journalSuppr" data-id="${esc(j.id)}" aria-label="Supprimer">${icone('trash-2', 'sm')}</button></div></div>
-      ${j.intemperie && j.cause ? `<div class="small" style="margin-top:8px"><b>Cause :</b> ${esc(j.cause)}${(j.verifs || []).length ? ` <span class="muted">· ${j.verifs.length} bonne(s) pratique(s) vérifiée(s)</span>` : ''}</div>` : ''}
+      ${j.intemperie && j.cause ? `<div class="small" style="margin-top:8px"><b>Cause :</b> ${esc(j.cause)}${(j.verifs || []).length ? ` <span class="muted">· ${accord(j.verifs.length, 'bonne(s) pratique(s) vérifiée(s)')}</span>` : ''}</div>` : ''}
       ${j.texte ? `<div class="tl-body">${esc(j.texte)}</div>` : ''}
       ${vignettesPhotos(photosDe(c.id, 'journal', j.id), { petit: true })}
       ${j.auteur ? `<div class="xs muted" style="margin-top:8px">${esc(j.auteur)}</div>` : ''}</div></div>`).join('')}</div>`
@@ -628,7 +628,7 @@ function vQualite(c) {
     const liste = res.filter(r => f === 'toutes' || (f === 'ouvertes' ? r.statut !== 'levée' : r.statut === 'levée'))
       .sort((a, b) => (a.echeance || '9').localeCompare(b.echeance || '9'));
     corps = `<div class="card"><div class="card-head"><div class="seg">${[['ouvertes', 'Ouvertes'], ['levées', 'Levées'], ['toutes', 'Toutes']].map(([x, l]) => `<button class="${f === x ? 'on' : ''}" data-act="resFiltre" data-f="${x}">${l}</button>`).join('')}</div>
-      <span class="hint">${res.length} réserve(s) · ${res.length - ouv} levée(s)</span></div>
+      <span class="hint">${accord(res.length, 'réserve(s)')} · ${accord(res.length - ouv, 'levée(s)')}</span></div>
       ${liste.length ? liste.map(r => {
         const retard = r.statut !== 'levée' && r.echeance && r.echeance < auj;
         return `<div class="res-item"><span class="res-num">${numeroReserve(r)}</span>
@@ -659,7 +659,7 @@ function vQualite(c) {
 
 /* ============================== Portefeuille ============================= */
 function vPortefeuille() {
-  const entete = enTetePage({ eyebrow: 'Organisation', titre: 'Portefeuille de chantiers', sous: [sousInfo('briefcase', `${db.chantiers.length} chantier(s)`)],
+  const entete = enTetePage({ eyebrow: 'Organisation', titre: 'Portefeuille de chantiers', sous: [sousInfo('briefcase', `${accord(db.chantiers.length, 'chantier(s)')}`)],
     actions: `<button class="btn" data-act="importFichier">${icone('upload')}Importer</button><button class="btn primary" data-act="chantierNew">${icone('plus')}Nouveau chantier</button>` });
   if (!db.chantiers.length) return entete + `<div class="card">${vide('briefcase', 'Aucun chantier', 'Créez votre premier chantier, importez un BTE SMAC, ou explorez la démo.',
     `<button class="btn primary" data-act="chantierNew">${icone('plus')}Nouveau chantier</button><button class="btn" data-act="demo">${icone('sparkles')}Démo</button>`)}</div>`;
@@ -744,7 +744,7 @@ function vSynchro() {
   }
   const eqs = Synchro.equipes.map(e => {
     const nb = db.chantiers.filter(c => c.equipeId === e.id).length;
-    return `<div class="set-row"><div class="row"><span class="kpi-ico">${icone('users')}</span><div class="s-txt"><b>${esc(e.nom)}</b><span>${nb} chantier(s) partagé(s) · ${e.role === 'admin' ? 'administrateur' : 'membre'}</span></div></div>
+    return `<div class="set-row"><div class="row"><span class="kpi-ico">${icone('users')}</span><div class="s-txt"><b>${esc(e.nom)}</b><span>${accord(nb, 'chantier(s) partagé(s)')} · ${e.role === 'admin' ? 'administrateur' : 'membre'}</span></div></div>
       <button class="btn" data-act="equipeGerer" data-id="${esc(e.id)}">${icone('users')}Membres</button></div>`;
   }).join('');
   return `<div class="card"><div class="card-head"><h3>${icone('cloud')}Synchronisation en ligne</h3>
@@ -1089,7 +1089,7 @@ const ACT = {
       db.taches.push({ id: uid(), chantierId: ui.chantierId, zone: z, lot: t.lot, tache: t.tache, fait: false, faitLe: '', faitPar: '', obs: '', ajout: false });
       n++;
     }));
-    save(); fermerModal(); ui.view = 'terrain'; render(); toast(`${n} tâche(s) créée(s)`, 'succes');
+    save(); fermerModal(); ui.view = 'terrain'; render(); toast(`${accord(n, 'tâche(s) créée(s)')}`, 'succes');
   },
 
   // Suivi

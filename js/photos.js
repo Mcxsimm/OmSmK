@@ -179,7 +179,7 @@ async function validerPhotosAttente(cible, cibleId) {
   const fichiers = _photosAttente; _photosAttente = [];
   await ajouterPhotos(fichiers, cible, cibleId);
   render();
-  toast(`${n} photo(s) ajoutée(s)`, 'succes');
+  toast(`${accord(n, 'photo(s) ajoutée(s)')}`, 'succes');
 }
 
 function voirPhoto(id) {
@@ -224,7 +224,7 @@ Object.assign(CHG, {
   photosGalerie: async el => {
     const fichiers = [...el.files]; el.value = '';
     const n = (await ajouterPhotos(fichiers, 'libre', '')).length;
-    render(); if (n) toast(`${n} photo(s) ajoutée(s)`, 'succes');
+    render(); if (n) toast(`${accord(n, 'photo(s) ajoutée(s)')}`, 'succes');
   },
   photoLegende: el => { const p = (db.photos || []).find(x => x.id === el.dataset.id); if (p) { p.legende = el.value.trim(); save(); } }
 });

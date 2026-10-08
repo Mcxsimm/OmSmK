@@ -20,7 +20,7 @@ async function importerFichier(file) {
     if (nom.endsWith('.json')) {
       const d = JSON.parse(await file.text());
       if (!d || !Array.isArray(d.chantiers)) throw new Error('Fichier de sauvegarde invalide');
-      if (!await confirmer('Restaurer la sauvegarde', `La sauvegarde contient ${d.chantiers.length} chantier(s). Elle <b>remplacera</b> les données de cet appareil.`, { ok: 'Restaurer', danger: true })) return;
+      if (!await confirmer('Restaurer la sauvegarde', `La sauvegarde contient ${accord(d.chantiers.length, 'chantier(s)')}. Elle <b>remplacera</b> les données de cet appareil.`, { ok: 'Restaurer', danger: true })) return;
       Synchro.oublierEtat();
       db = Object.assign(dbVide(), d); ui.chantierId = null; save(); fermerModal(); render(); toast('Sauvegarde restaurée', 'succes');
       return;
@@ -71,7 +71,7 @@ function importerTerrain(rows) {
   if (cible) ui.chantierId = cible.id;
   ui.view = 'terrain'; ui.zone = null;
   save(); fermerModal(); render();
-  toast(`${n} tâche(s) importée(s)${nc ? `, ${nc} chantier(s) créé(s)` : ''}`, 'succes');
+  toast(`${accord(n, 'tâche(s) importée(s)')}${nc ? `, ${accord(nc, 'chantier(s) créé(s)')}` : ''}`, 'succes');
 }
 
 // Import du BTE standard SMAC (onglets Synthèse, 1a Main d'œuvre, Étape 2 - Objectifs et suivi)
@@ -198,7 +198,7 @@ async function importerBTE(wb, nomFichier) {
   }
   ui.chantierId = c.id; ui.view = 'bte';
   save(); fermerModal(); render();
-  toast(`BTE importé : ${ops.length} opération(s)${suivi.length ? `, ${suivi.length} saisie(s) de suivi` : ''}`, 'succes');
+  toast(`BTE importé : ${accord(ops.length, 'opération(s)')}${suivi.length ? `, ${accord(suivi.length, 'saisie(s)')} de suivi` : ''}`, 'succes');
 }
 
 function phaseDeOperation(op) {
@@ -252,7 +252,7 @@ function exporterExcel() {
     ...secuDe(c.id).map(x => [x.date, TYPES_SECU[x.type].lib,
       x.type === 'causerie' ? x.theme : x.type === 'accueil' ? nomK(x.compagnonId) : x.type === 'permis' ? x.zone : x.type === 'evenement' ? x.nature : 'Visite',
       (x.participants || x.intervenants || []).map(nomK).join(', ') || nomK(x.victimeId) || x.auteur || '',
-      x.type === 'visite' ? `${Object.values(x.items || {}).filter(v => v === 'nc').length} non-conformité(s)` : x.type === 'permis' ? (x.surveillance && x.surveillance.fait ? `surveillance ${x.surveillance.heure}` : 'surveillance à confirmer') : (x.notes || x.description || '')])]);
+      x.type === 'visite' ? `${accord(Object.values(x.items || {}).filter(v => v === 'nc').length, 'non-conformité(s)')}` : x.type === 'permis' ? (x.surveillance && x.surveillance.fait ? `surveillance ${x.surveillance.heure}` : 'surveillance à confirmer') : (x.notes || x.description || '')])]);
   add('Terrain', [['Chantier', 'Zone', 'Lot', 'Tache', 'Fait', 'Fait le', 'Par', 'Observation', 'Non prévu'],
     ...deCh(db.taches).map(t => [c.nom, t.zone, t.lot, t.tache, estFait(t.fait) ? 'VRAI' : 'FAUX', t.faitLe, t.faitPar, t.obs, t.ajout ? 'oui' : ''])]);
   add('Journal', [['Date', 'Météo', 'Effectif', 'Heures', 'Intempérie', 'Cause', 'Texte', 'Auteur'],

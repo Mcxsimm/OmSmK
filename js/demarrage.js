@@ -82,7 +82,7 @@ document.addEventListener('focusout', () => setTimeout(() => {
 
 Synchro.base = () => db;
 Synchro.enregistrerBase = () => enregistrerLocal();
-Synchro.onChange = n => { rafraichirApresSynchro(); toast(`${n} mise(s) à jour reçue(s) de l'équipe`); };
+Synchro.onChange = n => { rafraichirApresSynchro(); toast(`${accord(n, 'mise(s) à jour reçue(s)')} de l'équipe`); };
 Synchro.onStatut = () => {
   renderSyncPill();
   if (ui.view === 'parametres' && !modalOuverte()) rafraichirApresSynchro();
@@ -93,7 +93,7 @@ addEventListener('online', () => envoyerPhotos());
 // Google Drive : la base fusionnée remplace celle de l'appareil
 Drive.base = () => db;
 Drive.remplacerBase = b => { db = Object.assign(dbVide(), b); if (!ch()) ui.chantierId = null; enregistrerLocal(); };
-Drive.onChange = (n, conflits) => { rafraichirApresSynchro(); toast(`${n} mise(s) à jour reprise(s) de Google Drive${conflits ? ` · ${conflits} conflit(s) : version de cet appareil conservée` : ''}`); };
+Drive.onChange = (n, conflits) => { rafraichirApresSynchro(); toast(`${accord(n, 'mise(s) à jour reprise(s)')} de Google Drive${conflits ? ` · ${accord(conflits, 'conflit(s)')} : version de cet appareil conservée` : ''}`); };
 Drive.onStatut = () => { renderSyncPill(); if (ui.view === 'parametres' && ui.paramTab === 'drive' && !modalOuverte()) rafraichirApresSynchro(); };
 
 /* Base de l'appareil : localStorage est lu tout de suite (démarrage instantané) ;

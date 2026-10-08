@@ -2,7 +2,7 @@ import { assertAlmostEquals, assertEquals } from 'jsr:@std/assert@1';
 import { charger } from './charger.js';
 
 const C = charger(['js/calculs.js', 'js/demo.js'],
-  ['calcSuivi', 'phasesBTE', 'heuresOp', 'statsTerrain', 'parseCSV', 'num', 'lundi', 'semISO', 'construireDemo']);
+  ['calcSuivi', 'phasesBTE', 'heuresOp', 'statsTerrain', 'parseCSV', 'num', 'accord', 'pluriel', 'lundi', 'semISO', 'construireDemo']);
 
 // Base reproduisant l'état du BTE « cas pratique CIGV » (semaine 1 + pare-vapeur semaine 2)
 function baseCIGV() {
@@ -81,4 +81,13 @@ Deno.test('dates : lundi de la semaine et numéro ISO', () => {
   assertEquals(C.semISO('2026-09-28'), 40);
   assertEquals(C.semISO('2027-01-01'), 53);
   assertEquals(C.num('1 234,5'), 1234.5);
+});
+
+Deno.test('accord en nombre : singulier en dessous de 2, pluriel au-delà', () => {
+  assertEquals(C.accord(0, 'réserve(s) ouverte(s)'), '0 réserve ouverte');
+  assertEquals(C.accord(1, 'chantier(s) actif(s)'), '1 chantier actif');
+  assertEquals(C.accord(2, 'compte(s) rendu(s)'), '2 comptes rendus');
+  assertEquals(C.accord('1,5', 'jour(s)-homme'), '1,5 jour-homme');
+  assertEquals(C.accord('12,0', 'jour(s)-homme'), '12,0 jours-homme');
+  assertEquals(C.pluriel(3, "quart(s) d'heure"), "quarts d'heure");
 });

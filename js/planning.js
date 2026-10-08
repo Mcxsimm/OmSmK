@@ -114,20 +114,20 @@ function vPlanning(c) {
   const actions = `<button class="btn" data-act="planGenerer" ${pl.rows.length ? '' : 'disabled'}>${icone('sparkles')}Générer depuis le BTE</button>
     <button class="btn" data-act="planJalon">${icone('flag')}Jalon</button>
     <button class="btn primary" data-act="planPDF" ${planifiees.length ? '' : 'disabled'}>${icone('printer')}Planning PDF</button>`;
-  const entete = enTetePage({ eyebrow: 'Planning d\'exécution', titre: 'Planning', sous: [pl.debut ? sousInfo('calendar', `${fmtDate(pl.debut)} → ${fmtDate(pl.finContrat || pl.finPlan)}`) : '', sousInfo('hard-hat', `${effectifParDefaut(c.id)} compagnon(s)`)], actions });
+  const entete = enTetePage({ eyebrow: 'Planning d\'exécution', titre: 'Planning', sous: [pl.debut ? sousInfo('calendar', `${fmtDate(pl.debut)} → ${fmtDate(pl.finContrat || pl.finPlan)}`) : '', sousInfo('hard-hat', `${accord(effectifParDefaut(c.id), 'compagnon(s)')}`)], actions });
   if (!pl.rows.length) {
     return entete + `<div class="card">${vide('chart-gantt', 'Pas encore de phases à planifier', 'Le planning se construit à partir des phases et des heures du BTE.', `<button class="btn primary" data-nav="bte">${icone('calculator')}Budget (BTE)</button>`)}</div>`;
   }
   if (!planifiees.length) {
     return entete + `<div class="card">${vide('chart-gantt', 'Le planning n\'est pas encore établi',
-      `${pl.rows.length} phase(s) au BTE. Générez un planning enchaîné à partir des heures budgétées et de l'effectif, puis ajustez les dates.`,
+      `${accord(pl.rows.length, 'phase(s)')} au BTE. Générez un planning enchaîné à partir des heures budgétées et de l'effectif, puis ajustez les dates.`,
       `<button class="btn primary" data-act="planGenerer">${icone('sparkles')}Générer le planning</button>`)}</div>` + tableauPlanning(c, pl) + carteJalons(pl);
   }
   const enRetard = pl.rows.filter(r => r.statut === 'retard');
   const prochain = pl.jalons.find(j => !j.fait && j.date >= aujourdHui());
   const kpis = `<div class="card mini-stats">
-    <div><div class="ms-lbl">${icone('flag', 'sm')}Fin contractuelle</div><div class="ms-val">${pl.finContrat ? fmtDate(pl.finContrat) : '—'}</div><div class="xs muted">${pl.finContrat ? `${joursOuvres(aujourdHui(), pl.finContrat)} jour(s) ouvré(s) restant(s)` : 'à renseigner sur la fiche chantier'}</div></div>
-    <div><div class="ms-lbl">${icone('trending-up', 'sm')}Fin projetée</div><div class="ms-val ${pl.retard ? 'neg' : ''}">${pl.finProjetee ? fmtDate(pl.finProjetee) : '—'}</div><div class="xs muted">${pl.retard ? `${icone('triangle-alert', 'sm')} ${pl.retard} jour(s) de retard` : 'dans les délais'}</div></div>
+    <div><div class="ms-lbl">${icone('flag', 'sm')}Fin contractuelle</div><div class="ms-val">${pl.finContrat ? fmtDate(pl.finContrat) : '—'}</div><div class="xs muted">${pl.finContrat ? `${accord(joursOuvres(aujourdHui(), pl.finContrat), 'jour(s) ouvré(s) restant(s)')}` : 'à renseigner sur la fiche chantier'}</div></div>
+    <div><div class="ms-lbl">${icone('trending-up', 'sm')}Fin projetée</div><div class="ms-val ${pl.retard ? 'neg' : ''}">${pl.finProjetee ? fmtDate(pl.finProjetee) : '—'}</div><div class="xs muted">${pl.retard ? `${icone('triangle-alert', 'sm')} ${accord(pl.retard, 'jour(s)')} de retard` : 'dans les délais'}</div></div>
     <div><div class="ms-lbl">${icone('activity', 'sm')}Phases en retard</div><div class="ms-val ${enRetard.length ? 'neg' : ''}">${enRetard.length}</div><div class="xs muted">${enRetard.length ? esc(enRetard.slice(0, 2).map(r => r.phase).join(', ')) : 'aucune'}</div></div>
     <div><div class="ms-lbl">${icone('flag', 'sm')}Prochain jalon</div><div class="ms-val">${prochain ? fmtDateCourt(prochain.date) : '—'}</div><div class="xs muted">${prochain ? esc(prochain.libelle) : 'aucun jalon à venir'}</div></div>
   </div>`;

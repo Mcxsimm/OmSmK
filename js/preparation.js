@@ -68,7 +68,7 @@ function vDocuments(c) {
   const derniers = derniersIndices(c.id);
   const attente = documentsEnAttente(db, c.id);
   const liste = (f === 'tous' ? derniers : f === 'historique' ? tous : f === 'doe' ? derniers.filter(d => d.doe) : derniers.filter(d => d.statut === f));
-  const entete = enTetePage({ eyebrow: 'Coordination', titre: 'Registre des documents', sous: [sousInfo('folder-open', `${derniers.length} document(s)`), attente.length ? `<span class="badge warn">${attente.length} visa(s) en attente</span>` : ''],
+  const entete = enTetePage({ eyebrow: 'Coordination', titre: 'Registre des documents', sous: [sousInfo('folder-open', `${accord(derniers.length, 'document(s)')}`), attente.length ? `<span class="badge warn">${accord(attente.length, 'visa(s)')} en attente</span>` : ''],
     actions: `<button class="btn" data-act="doePDF" ${derniers.some(d => d.doe) ? '' : 'disabled'}>${icone('file-text')}Bordereau DOE</button><button class="btn primary" data-act="docNew">${icone('plus')}Nouveau document</button>` });
   const seg = `<div class="seg seg-scroll">${[['tous', 'Dernier indice', derniers.length], ['diffuse', 'En attente de visa', derniers.filter(d => d.statut === 'diffuse').length], ['vise_obs', 'Visés avec obs.', derniers.filter(d => d.statut === 'vise_obs').length], ['refuse', 'Refusés', derniers.filter(d => d.statut === 'refuse').length], ['doe', 'DOE', derniers.filter(d => d.doe).length], ['historique', 'Historique', tous.length]]
     .map(([v, l, n]) => `<button class="${f === v ? 'on' : ''}" data-act="docFiltre" data-f="${v}">${l} <span class="n">${n}</span></button>`).join('')}</div>`;

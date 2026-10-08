@@ -1,5 +1,5 @@
 /* Service worker OmSmK : application utilisable hors-ligne sur chantier */
-const CACHE = 'omsmk-v10';
+const CACHE = 'omsmk-v11';
 const SHELL = [
   './', './index.html', './manifest.json', './css/app.css',
   './js/config.js', './js/icones.js', './js/referentiel.js', './js/calculs.js', './js/synchro.js', './js/drive.js', './js/demo.js',

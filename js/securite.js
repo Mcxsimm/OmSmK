@@ -43,7 +43,7 @@ function etatSecurite(c, auj = aujourdHui()) {
   const surv = permisAsurveiller(c.id, auj);
   const actionsSecu = (db.actions || []).filter(a => a.chantierId === c.id && (a.origine || {}).type === 'securite' && actionOuverte(a));
   const alertes = [];
-  if (sansAccueil.length) alertes.push({ sev: 'serious', ic: 'user', t: `${sansAccueil.length} compagnon(s) sans accueil sécurité`, d: sansAccueil.slice(0, 3).map(k => esc(nomCompagnon(k))).join(', ') + (sansAccueil.length > 3 ? '…' : ''), go: 'securite' });
+  if (sansAccueil.length) alertes.push({ sev: 'serious', ic: 'user', t: `${accord(sansAccueil.length, 'compagnon(s)')} sans accueil sécurité`, d: sansAccueil.slice(0, 3).map(k => esc(nomCompagnon(k))).join(', ') + (sansAccueil.length > 3 ? '…' : ''), go: 'securite' });
   if (surv.length) alertes.push({ sev: 'critical', ic: 'flame', t: `Surveillance après permis de feu à confirmer`, d: surv.map(p => `${fmtDateCourt(p.date)}${p.zone ? ' — ' + esc(p.zone) : ''}`).join(' · '), go: 'securite' });
   const enCours = c.dateDebut && c.dateDebut <= auj && (!c.dateFin || c.dateFin >= addDays(auj, -7));
   const derniere = causeries[0];
@@ -57,16 +57,16 @@ function vSecurite(c) {
   const e = etatSecurite(c);
   const f = ui.secuFiltre || 'tous';
   const boutons = Object.entries(TYPES_SECU).map(([t, d]) => `<button class="btn ${t === 'causerie' ? 'primary' : ''}" data-act="secuNew" data-t="${t}">${icone(d.ic)}${d.court}</button>`).join('');
-  const entete = enTetePage({ eyebrow: 'Prévention', titre: 'Sécurité', sous: [sousInfo('shield-check', `${e.tous.length} enregistrement(s)`)], actions: boutons });
+  const entete = enTetePage({ eyebrow: 'Prévention', titre: 'Sécurité', sous: [sousInfo('shield-check', `${accord(e.tous.length, 'enregistrement(s)')}`)], actions: boutons });
   const kpis = `<div class="kpis">
     <div class="card kpi"><div class="kpi-top"><span class="kpi-lbl">Jours sans accident avec arrêt</span><span class="kpi-ico">${icone('shield-check')}</span></div>
-      <div class="kpi-val">${e.joursSans === null ? '—' : e.joursSans}<small>${e.joursSans === null ? '' : ' j'}</small></div><div class="kpi-sub">${e.accidents.length ? `${e.accidents.length} accident(s) déclaré(s)` : 'aucun accident déclaré'}</div></div>
+      <div class="kpi-val">${e.joursSans === null ? '—' : e.joursSans}<small>${e.joursSans === null ? '' : ' j'}</small></div><div class="kpi-sub">${e.accidents.length ? `${accord(e.accidents.length, 'accident(s) déclaré(s)')}` : 'aucun accident déclaré'}</div></div>
     <div class="card kpi"><div class="kpi-top"><span class="kpi-lbl">Quarts d'heure sécurité</span><span class="kpi-ico">${icone('messages-square')}</span></div>
       <div class="kpi-val">${e.causeriesMois}<small> ce mois</small></div><div class="kpi-sub">${e.causeries[0] ? `dernier ${depuis(e.causeries[0].date)} · ${esc(e.causeries[0].theme || '')}` : 'aucun pour l\'instant'}</div></div>
     <div class="card kpi"><div class="kpi-top"><span class="kpi-lbl">Accueils sécurité</span><span class="kpi-ico">${icone('user')}</span></div>
       <div class="kpi-val">${e.equipe.length - e.sansAccueil.length}<small> / ${e.equipe.length}</small></div>
       <div style="margin-top:10px">${barre(e.equipe.length ? (e.equipe.length - e.sansAccueil.length) / e.equipe.length : 0, 'lg')}</div>
-      <div class="kpi-sub">${e.sansAccueil.length ? `${e.sansAccueil.length} compagnon(s) à accueillir` : e.equipe.length ? 'toute l\'équipe est accueillie' : 'équipe non renseignée (pointage)'}</div></div>
+      <div class="kpi-sub">${e.sansAccueil.length ? `${accord(e.sansAccueil.length, 'compagnon(s)')} à accueillir` : e.equipe.length ? 'toute l\'équipe est accueillie' : 'équipe non renseignée (pointage)'}</div></div>
     <div class="card kpi"><div class="kpi-top"><span class="kpi-lbl">Permis de feu</span><span class="kpi-ico">${icone('flame')}</span></div>
       <div class="kpi-val ${e.surv.length ? 'neg' : ''}">${e.surv.length}<small> à surveiller</small></div><div class="kpi-sub">${secuDe(c.id, 'permis').filter(p => p.date === aujourdHui()).length} permis aujourd'hui</div></div>
   </div>`;
@@ -83,9 +83,9 @@ function vSecurite(c) {
 function ligneSecu(s) {
   const d = TYPES_SECU[s.type] || TYPES_SECU.causerie;
   let titre = d.lib, meta = [], extra = '';
-  if (s.type === 'causerie') { titre = s.theme || d.lib; meta = [`${(s.participants || []).length} participant(s)`, s.animateur ? 'animé par ' + s.animateur : '']; extra = `<button class="btn sm" data-act="secuPDF" data-id="${esc(s.id)}">${icone('printer', 'sm')}Émargement</button>`; }
+  if (s.type === 'causerie') { titre = s.theme || d.lib; meta = [`${accord((s.participants || []).length, 'participant(s)')}`, s.animateur ? 'animé par ' + s.animateur : '']; extra = `<button class="btn sm" data-act="secuPDF" data-id="${esc(s.id)}">${icone('printer', 'sm')}Émargement</button>`; }
   if (s.type === 'accueil') { titre = `Accueil de ${nomK(s.compagnonId) || s.nomExterne || '—'}`; const n = Object.keys(s.items || {}).length; meta = [`${n} / ${REF.accueilSecurite.length} points`, s.animateur]; }
-  if (s.type === 'visite') { const nc = Object.values(s.items || {}).filter(v => v === 'nc').length; titre = `Visite sécurité${s.auteur ? ' — ' + s.auteur : ''}`; meta = [nc ? `${nc} non-conformité(s)` : 'aucune non-conformité']; }
+  if (s.type === 'visite') { const nc = Object.values(s.items || {}).filter(v => v === 'nc').length; titre = `Visite sécurité${s.auteur ? ' — ' + s.auteur : ''}`; meta = [nc ? `${accord(nc, 'non-conformité(s)')}` : 'aucune non-conformité']; }
   if (s.type === 'permis') {
     titre = `Permis de feu${s.zone ? ' — ' + s.zone : ''}`; meta = [[s.debut, s.fin].filter(Boolean).join(' → '), (s.intervenants || []).map(nomK).filter(Boolean).join(', ')];
     extra = s.surveillance && s.surveillance.fait ? `<span class="badge pos">${icone('check', 'sm')}Surveillé ${esc(s.surveillance.heure || '')}</span>` : `<button class="btn sm primary" data-act="secuSurveillance" data-id="${esc(s.id)}">${icone('check', 'sm')}Surveillance faite</button>`;
@@ -224,7 +224,7 @@ Object.assign(ACT, {
     if (!s) return;
     modalSignatures({ titre: `Signatures — ${TYPES_SECU[s.type].lib}`, sousTitre: `${fmtDate(s.date, true)}${s.theme ? ' · ' + esc(s.theme) : s.zone ? ' · ' + esc(s.zone) : ''}`,
       signataires: signatairesSecu(s), signatures: s.signatures || {},
-      apres: sig => { s.signatures = sig; save(); render(); toast(`${nbSignes(s)} / ${signatairesSecu(s).length} signature(s) enregistrée(s)`, 'succes'); } });
+      apres: sig => { s.signatures = sig; save(); render(); toast(`${nbSignes(s)} / ${accord(signatairesSecu(s).length, 'signature(s) enregistrée(s)')}`, 'succes'); } });
   },
   secuSave: () => {
     const type = val('scType'), id = val('scId');
@@ -264,7 +264,7 @@ Object.assign(ACT, {
       if (type === 'evenement' && s.mesures) { creerAction({ libelle: `Sécurité — ${s.mesures}`, responsable: ch().conducteur || '', echeance: addDays(s.date, 7), origine: { type: 'securite', id: s.id } }); nA++; }
     }
     save(); fermerModal(); render();
-    toast(`Enregistré : ${TYPES_SECU[type].lib.toLowerCase()}${nA ? ` · ${nA} action(s) corrective(s) créée(s)` : ''}`, 'succes');
+    toast(`Enregistré : ${TYPES_SECU[type].lib.toLowerCase()}${nA ? ` · ${accord(nA, 'action(s) corrective(s) créée(s)')}` : ''}`, 'succes');
   }
 });
 

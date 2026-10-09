@@ -19,23 +19,23 @@ function vDevis(c) {
   const decides = ds.filter(d => ['accepte', 'refuse'].includes(d.statut));
   const aRelancer = devisARelancer(db, c.id, auj);
   const impayes = situationsImpayees(db, c.id, auj);
-  const entete = enTetePage({ eyebrow: 'Gestion', titre: 'Devis et relances', sous: [sousInfo('file-plus', `${ds.length} devis`), impayes.length ? `<span class="badge neg">${impayes.length} impayé(s)</span>` : ''],
+  const entete = enTetePage({ eyebrow: 'Gestion', titre: 'Devis et relances', sous: [sousInfo('file-plus', `${ds.length} devis`), impayes.length ? `<span class="badge neg">${accord(impayes.length, 'impayé(s)')}</span>` : ''],
     actions: `<button class="btn primary" data-act="devisNew">${icone('plus')}Nouveau devis</button>` });
   const resume = `<div class="resume">
       <div><span>En attente de réponse</span><b>${fmtE(attente.reduce((t, d) => t + montantDevis(d), 0))}</b><small>${attente.length} devis émis${aRelancer.length ? ` · ${aRelancer.length} à relancer` : ''}</small></div>
       <div><span>Acceptés (avenants)</span><b class="pos">${fmtE(acceptes.reduce((t, d) => t + montantDevis(d), 0))}</b><small>${decides.length ? `taux d'acceptation ${pc(acceptes.length / decides.length)}` : 'aucune décision pour l\'instant'}</small></div>
-      <div><span>Impayés échus TTC</span><b class="${impayes.length ? 'neg' : ''}">${fmtE(impayes.reduce((t, x) => t + x.ttc, 0))}</b><small>${impayes.length ? `retard maximal ${Math.max(...impayes.map(x => x.retard))} jour(s)` : `échéance à ${parametresFinanciers(c).delai} jours`}</small></div>
+      <div><span>Impayés échus TTC</span><b class="${impayes.length ? 'neg' : ''}">${fmtE(impayes.reduce((t, x) => t + x.ttc, 0))}</b><small>${impayes.length ? `retard maximal ${accord(Math.max(...impayes.map(x => x.retard)), 'jour(s)')}` : `échéance à ${parametresFinanciers(c).delai} jours`}</small></div>
     </div>`;
   const relances = aRelancer.length || impayes.length ? `<div class="card"><div class="card-head"><h3>${icone('send')}Relances à faire</h3><span class="badge warn">${aRelancer.length + impayes.length}</span></div>
     <ul class="attention-list">
-      ${impayes.map(x => `<li><span class="sev critical">${icone('banknote', 'sm')}</span><div class="grow"><div class="strong">Situation n° ${esc(x.sit.numero)} impayée — ${fmtE2(x.ttc)} TTC</div><div class="small muted">Échéance ${fmtDate(x.echeance)} dépassée de ${x.retard} jour(s)${(x.sit.relances || []).length ? ` · ${(x.sit.relances || []).length} relance(s), dernière le ${fmtDate(x.sit.relances[x.sit.relances.length - 1])}` : ''}</div></div>
+      ${impayes.map(x => `<li><span class="sev critical">${icone('banknote', 'sm')}</span><div class="grow"><div class="strong">Situation n° ${esc(x.sit.numero)} impayée — ${fmtE2(x.ttc)} TTC</div><div class="small muted">Échéance ${fmtDate(x.echeance)} dépassée de ${accord(x.retard, 'jour(s)')}${(x.sit.relances || []).length ? ` · ${accord((x.sit.relances || []).length, 'relance(s)')}, dernière le ${fmtDate(x.sit.relances[x.sit.relances.length - 1])}` : ''}</div></div>
         <button class="btn sm" data-act="relanceSitPDF" data-id="${esc(x.sit.id)}">${icone('file-text', 'sm')}Lettre</button><button class="btn sm primary" data-act="relanceSit" data-id="${esc(x.sit.id)}">${icone('send', 'sm')}Relancer</button></li>`).join('')}
       ${aRelancer.map(d => `<li><span class="sev warning">${icone('file-plus', 'sm')}</span><div class="grow"><div class="strong">Devis ${esc(d.numero)} sans réponse — ${fmtE(montantDevis(d))} HT</div><div class="small muted">${esc(d.objet || '')} · émis le ${fmtDate(d.dateEmission)}${(d.relances || []).length ? ` · relancé le ${fmtDate(derniereRelance(d))}` : ''}</div></div>
         <button class="btn sm primary" data-act="relanceDevis" data-id="${esc(d.id)}">${icone('send', 'sm')}Relancer</button></li>`).join('')}
     </ul></div>` : '';
   const liste = `<div class="card"><div class="card-head"><h3>Devis de travaux supplémentaires</h3><span class="hint">acceptés : intégrés au marché comme avenants</span></div>
     ${ds.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>N°</th><th>Objet</th><th class="num">Montant HT</th><th>Émis le</th><th>Statut</th><th></th></tr></thead><tbody>
-      ${ds.map(d => `<tr><td class="strong">${esc(d.numero)}</td><td>${esc(d.objet || '')}${(d.relances || []).length ? `<div class="sub">${d.relances.length} relance(s)</div>` : ''}</td><td class="num">${fmtE2(montantDevis(d))}</td><td>${d.dateEmission ? fmtDate(d.dateEmission) : '—'}</td>
+      ${ds.map(d => `<tr><td class="strong">${esc(d.numero)}</td><td>${esc(d.objet || '')}${(d.relances || []).length ? `<div class="sub">${accord(d.relances.length, 'relance(s)')}</div>` : ''}</td><td class="num">${fmtE2(montantDevis(d))}</td><td>${d.dateEmission ? fmtDate(d.dateEmission) : '—'}</td>
         <td><span class="badge ${CLS_STATUT_DEVIS[d.statut] || ''} dot">${esc(libStatut(STATUTS_DEVIS, d.statut))}</span>${d.statut === 'accepte' && d.dateAcceptation ? `<div class="sub">le ${fmtDate(d.dateAcceptation)}</div>` : ''}</td>
         <td class="num"><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">
           ${d.statut === 'brouillon' ? `<button class="btn sm" data-act="devisStatut" data-id="${esc(d.id)}" data-s="emis">${icone('send', 'sm')}Émettre</button>` : ''}

@@ -11,6 +11,9 @@ const num = v => {
   const n = parseFloat(String(v).replace(/\s/g, '').replace(',', '.'));
   return isFinite(n) ? n : 0;
 };
+// Accord en nombre des libellés « (s) » : singulier en dessous de 2 (« 1 chantier actif », « 0 réserve », « 2 réserves »)
+const pluriel = (n, texte) => String(texte).replace(/\(s\)/g, Math.abs(num(n)) >= 2 ? 's' : '');
+const accord = (n, texte) => `${n} ${pluriel(n, texte)}`;
 const estFait = v => v === true || ['vrai', 'true', '1', 'oui', 'x', 'ok', 'fait'].includes(String(v ?? '').toLowerCase().trim());
 const norm = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
@@ -500,7 +503,7 @@ function rappelsDus(base, maintenant = new Date()) {
     if (enCours && equipe.length && heure >= 17 * 60) {
       const pointes = new Set((base.pointages || []).filter(p => p.chantierId === c.id && p.date === auj).map(p => p.compagnonId));
       const manq = equipe.filter(k => !pointes.has(k.id)).length;
-      if (manq) out.push({ id: `pt|${c.id}|${auj}`, titre: 'Pointage du jour à faire', corps: `${nom} : ${manq} compagnon(s) non pointé(s)`, vue: 'pointage', cid: c.id });
+      if (manq) out.push({ id: `pt|${c.id}|${auj}`, titre: 'Pointage du jour à faire', corps: `${nom} : ${accord(manq, 'compagnon(s) non pointé(s)')}`, vue: 'pointage', cid: c.id });
     }
   });
   return out;

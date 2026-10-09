@@ -44,10 +44,10 @@ function vSaisieRAF(c, mois) {
       <label class="row small" style="gap:6px">Coûts réels <select class="input" style="width:auto" data-change="rafSource" aria-label="Source des coûts réels">${[['auto', `Automatique (${r.source === 'sap' ? 'SAP' : 'OmSmK'})`], ['sap', 'Coûts SAP importés'], ['omsmk', 'Pointage + commandes OmSmK']]
         .map(([v, l]) => `<option value="${v}" ${(raf.source || 'auto') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label></div>
     <div class="resume r4" style="border-width:1px 0 0;border-radius:0">
-      <div class="row-link" data-nav="pointage"><span>Pointage</span><b>${fmt(lien.pointage.heures, 0)} h</b><small>${lien.pointage.n} journée(s) compagnon · ${fmtE(lien.pointage.heures * num(c.tauxHoraire))}</small></div>
-      <div class="row-link" data-nav="commandes"><span>Commandes fournisseurs</span><b>${fmtE(lien.commandes.montant)}</b><small>${lien.commandes.n} commande(s) engagée(s)</small></div>
-      <div class="row-link" data-nav="situations"><span>Facturation</span><b>${fmtE(lien.facturation.montant)}</b><small>${lien.facturation.n} situation(s) émise(s)</small></div>
-      <div class="row-link" data-act="rafOnglet" data-t="couts"><span>Coûts réels SAP</span><b>${lien.couts.n ? fmtE(lien.couts.montant) : '—'}</b><small>${lien.couts.n ? `${lien.couts.n} poste(s) individuel(s) · jusqu'au ${fmtDate(lien.couts.dernier)}` : 'aucun import'}</small></div>
+      <div class="row-link" data-nav="pointage"><span>Pointage</span><b>${fmt(lien.pointage.heures, 0)} h</b><small>${accord(lien.pointage.n, 'journée(s)')} compagnon · ${fmtE(lien.pointage.heures * num(c.tauxHoraire))}</small></div>
+      <div class="row-link" data-nav="commandes"><span>Commandes fournisseurs</span><b>${fmtE(lien.commandes.montant)}</b><small>${accord(lien.commandes.n, 'commande(s) engagée(s)')}</small></div>
+      <div class="row-link" data-nav="situations"><span>Facturation</span><b>${fmtE(lien.facturation.montant)}</b><small>${accord(lien.facturation.n, 'situation(s) émise(s)')}</small></div>
+      <div class="row-link" data-act="rafOnglet" data-t="couts"><span>Coûts réels SAP</span><b>${lien.couts.n ? fmtE(lien.couts.montant) : '—'}</b><small>${lien.couts.n ? `${accord(lien.couts.n, 'poste(s) individuel(s)')} · jusqu'au ${fmtDate(lien.couts.dernier)}` : 'aucun import'}</small></div>
     </div></div>`;
   const champE = (k, v, lib) => `<input class="input cell" style="width:120px;text-align:right;border-color:var(--border-strong);background:var(--surface)" type="number" step="any" value="${v ? Math.round(v * 100) / 100 : ''}" data-change="rafCA" data-k="${k}" aria-label="${esc(lib)}">`;
   const ligne = (lib, v, extra = '') => `<dt>${lib}</dt><dd class="${extra}">${v}</dd>`;
@@ -112,7 +112,7 @@ function vCoutsReels(c, mois) {
     return `<div class="card">${vide('database', 'Aucun coût réel importé', `Dans SAP, affichez les <b>postes individuels de coûts réels</b> de l'OTP ${esc(otpDe(c) || '')} (Afficher postes indiv. cts réels pour projets), exportez la liste en Excel (ou fichier local), puis importez-la ici. Les coûts sont rattachés au chantier par l'élément d'OTP et classés par nature comptable dans les postes du RAF.`,
       `<button class="btn primary" data-act="coutsImport">${icone('upload')}Importer l'export SAP</button><button class="btn" data-act="coutNew">${icone('plus')}Saisir un coût</button>`)}</div>`;
   }
-  const synthese = `<div class="card"><div class="card-head"><h3>Coûts réels par poste</h3><span class="hint">${tous.length} poste(s) individuel(s) · cliquez pour filtrer</span></div>
+  const synthese = `<div class="card"><div class="card-head"><h3>Coûts réels par poste</h3><span class="hint">${accord(tous.length, 'poste(s) individuel(s)')} · cliquez pour filtrer</span></div>
     <div class="table-wrap"><table class="table"><tbody>${parPoste.map(([k, lib, m]) => `<tr class="row-link" data-act="coutsFiltre" data-p="${filtreP === k ? '' : k}" style="${filtreP === k ? 'box-shadow:inset 3px 0 0 var(--brand-2)' : ''}"><td class="strong">${esc(lib)}</td><td class="num">${cellE(m)}</td></tr>`).join('')}
       <tr class="total"><td>Total</td><td class="num">${fmtE(parPoste.reduce((t, x) => t + x[2], 0))}</td></tr></tbody></table></div></div>`;
   const reglesCarte = `<div class="card"><div class="card-head"><h3>Natures comptables → postes</h3><span class="hint">règle au préfixe le plus long</span></div>
@@ -182,7 +182,7 @@ async function importerCoutsSAP(file) {
   });
   if (rafDe(c).source === 'omsmk' && parChantier.has(c.id)) delete c.raf.source;
   save(); render();
-  toast(`${n} coût(s) importé(s)${parChantier.size > 1 ? ` sur ${parChantier.size} chantiers` : ''}${ignores ? ` · ${ignores} ligne(s) d'un autre OTP ignorée(s)` : ''}`, 'succes');
+  toast(`${accord(n, 'coût(s) importé(s)')}${parChantier.size > 1 ? ` sur ${parChantier.size} chantiers` : ''}${ignores ? ` · ${accord(ignores, 'ligne(s) d\'un autre OTP ignorée(s)')}` : ''}`, 'succes');
 }
 
 function modalCout() {

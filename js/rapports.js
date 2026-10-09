@@ -21,7 +21,7 @@ function modalRapportMensuel() {
   ouvrirModal('Rapport mensuel d\'avancement', `
     <p class="muted" style="margin-bottom:14px">Synthèse du mois pour le maître d'œuvre et le maître d'ouvrage, établie à partir du suivi, du pointage, du journal, de la sécurité, des réserves et des situations.</p>
     ${selectHTML('rmMois', 'Mois', mois, mois.some(x => x[0] === defaut) ? defaut : mois[0][0])}
-    <label class="checkbox field"><input type="checkbox" id="rmPhotos" checked><span>Joindre les photos du mois (6 au plus) <span class="muted small">— ${nbPhotos(defaut)} photo(s) en ${moisLong(defaut)}</span></span></label>
+    <label class="checkbox field"><input type="checkbox" id="rmPhotos" checked><span>Joindre les photos du mois (6 au plus) <span class="muted small">— ${accord(nbPhotos(defaut), 'photo(s)')} en ${moisLong(defaut)}</span></span></label>
     <label class="checkbox field"><input type="checkbox" id="rmFinances" checked><span>Inclure la facturation (situations de travaux)</span></label>
     ${zoneTexte('rmMot', 'Commentaire du conducteur de travaux (facultatif)', '', 'rows="3" placeholder="points forts du mois, difficultés, besoins de décisions…"')}`,
     `<button class="btn" data-act="fermerModal">Annuler</button><button class="btn primary" data-act="rmGenerer">${icone('file-text')}Générer le PDF</button>`, { icone: 'file-text' });
@@ -56,7 +56,7 @@ async function rapportMensuelPDF(mois, opts = {}) {
   const tuiles = [
     ['Avancement fin de mois', pc(S.avancement.fin), `+${Math.round(S.avancement.gain * 100)} pts sur le mois`],
     ['Effectif moyen', S.effectif.jours ? fmt(S.effectif.moyen, 1) : '-', `${fmt(S.effectif.joursHomme, 1)} jours-homme pointés`],
-    ['Intempéries', String(S.joursIntemperie), 'jour(s) d\'arrêt'],
+    ['Intempéries', String(S.joursIntemperie), pluriel(S.joursIntemperie, 'jour(s) d\'arrêt')],
     ['Délai', pl.finProjetee ? (pl.retard ? `+${pl.retard} j` : 'Tenu') : '-', pl.finProjetee ? `fin projetée ${fmtDate(pl.finProjetee)}` : 'planning non établi']
   ];
   tuiles.forEach(([l, v, s], i) => {
@@ -93,7 +93,7 @@ async function rapportMensuelPDF(mois, opts = {}) {
       if (y + hMm > 282) { doc.addPage(); y = 20; }
       doc.addImage(png, 'PNG', 14, y, wMm, hMm); y += hMm + 4;
     } catch (_e) { /* graphique non disponible */ }
-    para(pl.retard ? `Fin projetée au ${fmtDate(pl.finProjetee)} au rythme constaté, soit ${pl.retard} jour(s) ouvré(s) après la fin contractuelle du ${fmtDate(pl.finContrat)}.` : `Fin projetée au ${fmtDate(pl.finProjetee)} : le délai contractuel${pl.finContrat ? ' du ' + fmtDate(pl.finContrat) : ''} est tenu.`);
+    para(pl.retard ? `Fin projetée au ${fmtDate(pl.finProjetee)} au rythme constaté, soit ${accord(pl.retard, 'jour(s) ouvré(s)')} après la fin contractuelle du ${fmtDate(pl.finContrat)}.` : `Fin projetée au ${fmtDate(pl.finProjetee)} : le délai contractuel${pl.finContrat ? ' du ' + fmtDate(pl.finContrat) : ''} est tenu.`);
     const jal = pl.jalons.filter(j => j.date >= S.du && j.date <= addDays(S.au, 45));
     if (jal.length) para('Jalons : ' + jal.map(j => `${j.libelle} le ${fmtDate(j.date)}${j.fait ? ' (atteint)' : ''}`).join(' ; ') + '.', 9);
   }
@@ -101,9 +101,9 @@ async function rapportMensuelPDF(mois, opts = {}) {
   // Effectifs et intempéries
   titre('Effectifs et conditions', 26);
   para(S.effectif.jours
-    ? `${fmt(S.effectif.joursHomme, 1)} jours-homme pointés sur ${S.effectif.jours} jour(s) travaillé(s), soit un effectif moyen de ${fmt(S.effectif.moyen, 1)} compagnon(s) (${fmt(S.effectif.heures, 0)} h).`
+    ? `${fmt(S.effectif.joursHomme, 1)} jours-homme pointés sur ${accord(S.effectif.jours, 'jour(s) travaillé(s)')}, soit un effectif moyen de ${accord(fmt(S.effectif.moyen, 1), 'compagnon(s)')} (${fmt(S.effectif.heures, 0)} h).`
     : 'Aucun pointage journalier enregistré sur le mois.');
-  para(S.joursIntemperie ? `${S.joursIntemperie} jour(s) d'arrêt pour intempéries${S.effectif.intemp ? ` (${fmt(S.effectif.intemp, 1)} h déclarées)` : ''}.` : 'Aucun arrêt pour intempéries.');
+  para(S.joursIntemperie ? `${accord(S.joursIntemperie, 'jour(s)')} d'arrêt pour intempéries${S.effectif.intemp ? ` (${fmt(S.effectif.intemp, 1)} h déclarées)` : ''}.` : 'Aucun arrêt pour intempéries.');
 
   // Faits marquants
   const faits = S.journal.filter(j => j.texte || j.intemperie);
@@ -115,8 +115,8 @@ async function rapportMensuelPDF(mois, opts = {}) {
   // Sécurité et qualité
   titre('Sécurité et qualité', 30);
   const sec = S.securite;
-  para(`Sécurité : ${sec.causeries} quart(s) d'heure sécurité, ${sec.accueils} accueil(s) de nouveaux arrivants, ${sec.visites} visite(s) sécurité, ${sec.permis} permis de feu. ${sec.accidents ? sec.accidents + ' accident(s) déclaré(s).' : 'Aucun accident.'}`);
-  para(`Qualité : ${S.reserves.creees} réserve(s) émise(s) et ${S.reserves.levees} levée(s) dans le mois ; ${S.reserves.ouvertes} réserve(s) ouverte(s) en fin de mois.`);
+  para(`Sécurité : ${accord(sec.causeries, 'quart(s)')} d'heure sécurité, ${accord(sec.accueils, 'accueil(s)')} de nouveaux arrivants, ${accord(sec.visites, 'visite(s)')} sécurité, ${sec.permis} permis de feu. ${sec.accidents ? sec.accidents + ' accident(s) déclaré(s).' : 'Aucun accident.'}`);
+  para(`Qualité : ${accord(S.reserves.creees, 'réserve(s) émise(s)')} et ${accord(S.reserves.levees, 'levée(s)')} dans le mois ; ${accord(S.reserves.ouvertes, 'réserve(s) ouverte(s)')} en fin de mois.`);
 
   // Facturation
   if (opts.finances) {

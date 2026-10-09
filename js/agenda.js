@@ -90,7 +90,7 @@ async function verifierRappels(test = false) {
   Object.keys(vus).forEach(k => { if (vus[k] < addDays(auj, -7)) delete vus[k]; });
   const dus = rappelsDus(db).filter(r => !vus[r.id]);
   for (const r of dus.slice(0, 5)) { await afficherNotification(r); vus[r.id] = auj; }
-  if (dus.length > 5) { await afficherNotification({ id: 'resume|' + auj, titre: 'OmSmK', corps: `${dus.length - 5} autre(s) rappel(s) : ouvrez Ma journée`, vue: 'journee', cid: ui.chantierId || '' }); dus.slice(5).forEach(r => { vus[r.id] = auj; }); }
+  if (dus.length > 5) { await afficherNotification({ id: 'resume|' + auj, titre: 'OmSmK', corps: `${accord(dus.length - 5, 'autre(s) rappel(s)')} : ouvrez Ma journée`, vue: 'journee', cid: ui.chantierId || '' }); dus.slice(5).forEach(r => { vus[r.id] = auj; }); }
   if (test && !dus.length) await afficherNotification({ id: 'test|' + Date.now(), titre: 'Rappels OmSmK activés', corps: 'Vous serez prévenu des actions échues, réunions, permis de feu et pointages manquants.', vue: 'journee', cid: ui.chantierId || '' });
   localStorage.setItem(RAPPELS_VUS_KEY, JSON.stringify(vus));
   planifierRappels();
@@ -140,7 +140,7 @@ Object.assign(ACT, {
     if (!ev.length) return toast('Aucun événement à venir pour ces critères.', 'info');
     fermerModal();
     partagerOuTelecharger(`OmSmK_agenda_${aujourdHui()}.ics`, genererICS(ev, chs.length === 1 ? `OmSmK — ${chs[0].nom}` : 'OmSmK — chantiers'), 'text/calendar', 'Agenda OmSmK');
-    toast(`${ev.length} événement(s) prêts à ajouter à votre agenda`, 'succes');
+    toast(`${accord(ev.length, 'événement(s)')} prêts à ajouter à votre agenda`, 'succes');
   },
   agReunion: el => {
     const c = ch();

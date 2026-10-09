@@ -31,8 +31,8 @@ function vBilan(c) {
       }).join('')}</tbody></table></div>
     <div class="card-foot small muted">Les cadences constatées alimentent le retour d'expérience et la mise à jour des cadences standard pour les prochains chiffrages.</div></div>`;
   const autres = `<div class="card mini-stats">
-      <div><div class="ms-lbl">${icone('shield-check', 'sm')}Réserves</div><div class="ms-val">${b.qualite.levees} / ${b.qualite.reserves}</div><div class="xs muted">levées${b.qualite.delaiMoyen ? ` en ${b.qualite.delaiMoyen} j en moyenne` : ''}${b.qualite.ouvertes ? ` · ${b.qualite.ouvertes} ouverte(s)` : ''}</div></div>
-      <div><div class="ms-lbl">${icone('shield-alert', 'sm')}Sécurité</div><div class="ms-val ${b.securite.accidents ? 'neg' : ''}">${b.securite.accidents}</div><div class="xs muted">accident(s) · ${b.securite.causeries} quart(s) d'heure</div></div>
+      <div><div class="ms-lbl">${icone('shield-check', 'sm')}Réserves</div><div class="ms-val">${b.qualite.levees} / ${b.qualite.reserves}</div><div class="xs muted">levées${b.qualite.delaiMoyen ? ` en ${b.qualite.delaiMoyen} j en moyenne` : ''}${b.qualite.ouvertes ? ` · ${accord(b.qualite.ouvertes, 'ouverte(s)')}` : ''}</div></div>
+      <div><div class="ms-lbl">${icone('shield-alert', 'sm')}Sécurité</div><div class="ms-val ${b.securite.accidents ? 'neg' : ''}">${b.securite.accidents}</div><div class="xs muted">${pluriel(b.securite.accidents, 'accident(s)')} · ${accord(b.securite.causeries, 'quart(s)')} d'heure</div></div>
       <div><div class="ms-lbl">${icone('cloud-rain', 'sm')}Intempéries</div><div class="ms-val">${b.joursIntemperie} j</div><div class="xs muted">d'arrêt</div></div>
       <div><div class="ms-lbl">${icone('landmark', 'sm')}Retenue de garantie</div><div class="ms-val">${b.liberationRG ? fmtDateCourt(b.liberationRG) : '—'}</div><div class="xs muted">${b.liberationRG ? `libérable le ${fmtDate(b.liberationRG)} · ${fmtE(F.rg)}` : 'à la date de réception + 1 an'}</div></div>
     </div>`;
@@ -65,7 +65,7 @@ function bilanPDF() {
       ['Marge brute', b.finances.ca ? `${fmtE(b.finances.margePrevue)} (${pc(b.finances.tauxPrevu)})` : '-', b.finances.ca ? `${fmtE(b.finances.margeFin)} (${pc(b.finances.tauxFin)})` : '-', b.finances.ca ? signeE(b.finances.margeFin - b.finances.margePrevue) : '-'],
       ['Délai', fmtDate(b.delai.finContrat) || '-', fmtDate(b.delai.finReelle) || '-', b.delai.retard ? `+${b.delai.retard} j ouvrés` : 'tenu'],
       ['Réserves levées', '', `${b.qualite.levees} / ${b.qualite.reserves}`, b.qualite.delaiMoyen ? `${b.qualite.delaiMoyen} j en moyenne` : ''],
-      ['Accidents / intempéries', '', `${b.securite.accidents} accident(s)`, `${b.joursIntemperie} j d'intempéries`]
+      ['Accidents / intempéries', '', `${accord(b.securite.accidents, 'accident(s)')}`, `${b.joursIntemperie} j d'intempéries`]
     ].map(r => r.map(pdfTxt)),
     columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } }
   }));
@@ -104,7 +104,7 @@ Object.assign(ACT, {
   bilanCloturer: async () => {
     const c = ch();
     const manque = REF.cloture.length - Object.keys(bilanDe(c).cloture || {}).length;
-    if (!await confirmer('Clôturer le chantier', manque ? `${manque} étape(s) de clôture ne sont pas cochées. Clôturer quand même ?` : 'Le chantier passera au statut « Clôturé ». Vous pourrez le rouvrir.', { ok: 'Clôturer', icone: 'flag' })) return;
+    if (!await confirmer('Clôturer le chantier', manque ? `${accord(manque, 'étape(s)')} de clôture ne sont pas cochées. Clôturer quand même ?` : 'Le chantier passera au statut « Clôturé ». Vous pourrez le rouvrir.', { ok: 'Clôturer', icone: 'flag' })) return;
     c.clotureLe = aujourdHui(); save(); render(); toast('Chantier clôturé', 'succes');
   },
   bilanRouvrir: () => { const c = ch(); delete c.clotureLe; save(); render(); }

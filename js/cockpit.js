@@ -50,13 +50,13 @@ function vJournee() {
   const h = new Date().getHours();
   const salut = h < 12 ? 'Bonjour' : h < 18 ? 'Bon après-midi' : 'Bonsoir';
   const entete = enTetePage({ eyebrow: fmtDate(auj, true), titre: `${salut}${user && user.prenom ? ' ' + user.prenom : ''}`,
-    sous: [sousInfo('briefcase', `${actifs.length} chantier(s) actif(s)`), retard.length ? `<span class="badge neg">${retard.length} action(s) en retard</span>` : '<span class="badge pos">Aucune action en retard</span>'],
+    sous: [sousInfo('briefcase', `${accord(actifs.length, 'chantier(s) actif(s)')}`), retard.length ? `<span class="badge neg">${accord(retard.length, 'action(s)')} en retard</span>` : '<span class="badge pos">Aucune action en retard</span>'],
     actions: `<button class="btn primary" data-act="cpSaisieOuvrir">${icone('plus')}Nouvelle action</button>` });
 
   const kpis = `<div class="resume">
-    <div><span>Actions en retard</span><b class="${retard.length ? 'neg' : ''}">${retard.length}</b><small>${ouvertes.length} action(s) ouverte(s) au total</small></div>
+    <div><span>Actions en retard</span><b class="${retard.length ? 'neg' : ''}">${retard.length}</b><small>${accord(ouvertes.length, 'action(s) ouverte(s)')} au total</small></div>
     <div><span>À échéance sous 7 jours</span><b>${semaine.length}</b><small>${semaine.filter(a => a.echeance === auj).length} pour aujourd'hui</small></div>
-    <div><span>Alertes importantes</span><b class="${crit.length ? 'neg' : ''}">${crit.length}</b><small>${al.length} point(s) d'attention sur ${db.chantiers.length} chantier(s)</small></div>
+    <div><span>Alertes importantes</span><b class="${crit.length ? 'neg' : ''}">${crit.length}</b><small>${accord(al.length, 'point(s)')} d'attention sur ${accord(db.chantiers.length, 'chantier(s)')}</small></div>
   </div>`;
 
   const aFaire = retard.concat(ouvertes.filter(a => !actionEnRetard(a, auj) && (!a.echeance || a.echeance <= addDays(auj, 7)))).slice(0, 14);
@@ -67,7 +67,7 @@ function vJournee() {
       <input class="input" id="cpEch" type="date" value="${addDays(auj, 2)}" style="max-width:150px" aria-label="Échéance">
       <button class="btn primary" data-act="cpAjout">${icone('plus')}</button></div>
     ${aFaire.length ? aFaire.map(a => ligneAction(a, { chantier: db.chantiers.length > 1 })).join('') : `<div class="card-body row"><span class="sev good">${icone('circle-check', 'sm')}</span><span class="muted">Rien d'urgent. Profitez-en pour passer sur un chantier.</span></div>`}
-    ${ouvertes.length > aFaire.length ? `<div class="card-foot small muted">${ouvertes.length - aFaire.length} autre(s) action(s) à plus long terme</div>` : ''}</div>`;
+    ${ouvertes.length > aFaire.length ? `<div class="card-foot small muted">${accord(ouvertes.length - aFaire.length, 'autre(s) action(s)')} à plus long terme</div>` : ''}</div>`;
 
   const jourLib = d => d === auj ? 'Aujourd\'hui' : d === addDays(auj, 1) ? 'Demain' : new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' });
   let dernierJour = '';

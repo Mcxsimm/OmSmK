@@ -58,7 +58,7 @@ function vActions(c) {
   const ouvertes = toutes.filter(actionOuverte);
   const retard = ouvertes.filter(a => actionEnRetard(a, auj));
   const liste = toutes.filter(a => f === 'toutes' || (f === 'faites' ? !actionOuverte(a) : f === 'retard' ? actionEnRetard(a, auj) : actionOuverte(a)));
-  const entete = enTetePage({ eyebrow: 'Coordination', titre: 'Plan d\'actions', sous: [sousInfo('list-todo', `${ouvertes.length} action(s) ouverte(s)`), retard.length ? `<span class="badge neg">${retard.length} en retard</span>` : ''],
+  const entete = enTetePage({ eyebrow: 'Coordination', titre: 'Plan d\'actions', sous: [sousInfo('list-todo', `${accord(ouvertes.length, 'action(s) ouverte(s)')}`), retard.length ? `<span class="badge neg">${retard.length} en retard</span>` : ''],
     actions: `<button class="btn" data-nav="reunions">${icone('messages-square')}Comptes rendus</button><button class="btn primary" data-act="actNew">${icone('plus')}Nouvelle action</button>` });
   const saisie = `<div class="card"><div class="card-body act-rapide">${datalistResponsables(c.id)}
       <input class="input grow" id="arLib" placeholder="Nouvelle action : relancer le BET pour les détails d'acrotère…" aria-label="Libellé de l'action">
@@ -93,7 +93,7 @@ function creerAction(champs) {
 function vAnnuaire(c) {
   const ks = contactsDe(c.id);
   const autres = db.chantiers.filter(x => x.id !== c.id && contactsDe(x.id).length);
-  const entete = enTetePage({ eyebrow: 'Coordination', titre: 'Annuaire du chantier', sous: [sousInfo('contact', `${ks.length} intervenant(s)`)],
+  const entete = enTetePage({ eyebrow: 'Coordination', titre: 'Annuaire du chantier', sous: [sousInfo('contact', `${accord(ks.length, 'intervenant(s)')}`)],
     actions: `${autres.length ? `<button class="btn" data-act="annImporter">${icone('copy')}Reprendre d'un chantier</button>` : ''}<button class="btn primary" data-act="contactNew">${icone('plus')}Nouvel intervenant</button>` });
   if (!ks.length) return entete + `<div class="card">${vide('contact', 'Aucun intervenant', 'Maître d\'ouvrage, maître d\'œuvre, bureau de contrôle, CSPS, fournisseurs… Tous les contacts du chantier à portée de main, pour appeler, écrire et convoquer aux réunions.',
     `<button class="btn primary" data-act="contactNew">${icone('plus')}Nouvel intervenant</button>${autres.length ? `<button class="btn" data-act="annImporter">${icone('copy')}Reprendre d'un autre chantier</button>` : ''}`)}</div>`;
@@ -125,7 +125,7 @@ function vReunions(c) {
   if (ui.reunionId && (db.reunions || []).some(r => r.id === ui.reunionId && r.chantierId === c.id)) return editeurReunion(c, db.reunions.find(r => r.id === ui.reunionId));
   ui.reunionId = null;
   const rs = reunionsDe(c.id);
-  const entete = enTetePage({ eyebrow: 'Coordination', titre: 'Réunions et comptes rendus', sous: [sousInfo('messages-square', `${rs.length} compte(s) rendu(s)`)],
+  const entete = enTetePage({ eyebrow: 'Coordination', titre: 'Réunions et comptes rendus', sous: [sousInfo('messages-square', `${accord(rs.length, 'compte(s) rendu(s)')}`)],
     actions: `<button class="btn" data-nav="actions">${icone('list-todo')}Plan d'actions</button><button class="btn primary" data-act="reuNew">${icone('plus')}Nouveau compte rendu</button>` });
   if (!rs.length) return entete + `<div class="card">${vide('messages-square', 'Aucun compte rendu', 'Préparez la réunion de chantier, prenez les notes en séance (participants, points abordés, actions avec responsable et échéance) et diffusez le CR en PDF dans la foulée.',
     `<button class="btn primary" data-act="reuNew">${icone('plus')}Nouveau compte rendu</button>`)}</div>`;
@@ -138,7 +138,7 @@ function vReunions(c) {
       return `<div class="res-item reu-item" data-act="reuOuvrir" data-id="${esc(r.id)}">
         <span class="res-num">N° ${esc(r.numero)}</span>
         <div><div class="r-desc">${esc(r.type || 'Réunion')} du ${fmtDate(r.date, true)}</div>
-          <div class="r-meta"><span>${icone('users', 'sm')}${pres} présent(s)</span><span>${icone('list-checks', 'sm')}${(r.points || []).length} point(s)</span><span>${icone('list-todo', 'sm')}${acts.length} action(s)${acts.filter(actionOuverte).length ? ` dont ${acts.filter(actionOuverte).length} ouverte(s)` : ''}</span></div></div>
+          <div class="r-meta"><span>${icone('users', 'sm')}${accord(pres, 'présent(s)')}</span><span>${icone('list-checks', 'sm')}${accord((r.points || []).length, 'point(s)')}</span><span>${icone('list-todo', 'sm')}${accord(acts.length, 'action(s)')}${acts.filter(actionOuverte).length ? ` dont ${accord(acts.filter(actionOuverte).length, 'ouverte(s)')}` : ''}</span></div></div>
         <div class="row" style="flex-wrap:nowrap">${r.diffuseLe ? `<span class="badge pos">${icone('send', 'sm')}Diffusé le ${fmtDateCourt(r.diffuseLe)}</span>` : '<span class="badge warn">Brouillon</span>'}${icone('chevron-right')}</div></div>`;
     }).join('')}</div></div>`;
 }
@@ -160,7 +160,7 @@ function editeurReunion(c, r) {
       ${champ('reDate', 'Date', r.date, 'date', `data-change="reuChamp" data-f="date"`)}
       ${champ('reHeure', 'Heure', r.heure, 'time', `data-change="reuChamp" data-f="heure"`)}
       ${champ('reLieu', 'Lieu', r.lieu, 'text', `data-change="reuChamp" data-f="lieu" placeholder="base vie, bureau MOE…"`)}</div></div></div>`;
-  const participants = `<div class="card"><div class="card-head"><h3>Participants</h3><span class="hint">${parts.filter(p => p.statut === 'present').length} présent(s)</span></div>
+  const participants = `<div class="card"><div class="card-head"><h3>Participants</h3><span class="hint">${accord(parts.filter(p => p.statut === 'present').length, 'présent(s)')}</span></div>
     ${parts.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Société</th><th>Nom</th><th>Rôle</th><th>Présence</th><th></th></tr></thead><tbody>
       ${parts.map((p, i) => `<tr><td class="strong">${esc(p.societe || '—')}</td><td>${esc(p.nom || '')}</td><td class="muted small">${esc(p.role || '')}</td>
         <td><select class="input" style="height:32px;width:130px" data-change="reuPresence" data-i="${i}" aria-label="Présence">${STATUTS_PARTICIPANT.map(([v, l]) => `<option value="${v}" ${p.statut === v ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
@@ -176,7 +176,7 @@ function editeurReunion(c, r) {
         <button class="btn ghost icon sm" data-act="reuRetirerPoint" data-i="${i}" aria-label="Retirer le point">${icone('x', 'sm')}</button></div>
       <textarea class="input" rows="3" placeholder="Constats, décisions, informations…" data-change="reuPoint" data-i="${i}" data-f="texte" aria-label="Contenu du point ${i + 1}">${esc(p.texte || '')}</textarea></div>`).join('')
       : '<div class="card-body muted">Aucun point pour l\'instant.</div>'}</div>`;
-  const actions = `<div class="card"><div class="card-head"><h3>Actions décidées</h3><span class="hint">${actsCR.length} action(s)</span></div>
+  const actions = `<div class="card"><div class="card-head"><h3>Actions décidées</h3><span class="hint">${accord(actsCR.length, 'action(s)')}</span></div>
     ${actsCR.map(a => ligneAction(a)).join('')}
     <div class="card-body act-rapide">${datalistResponsables(c.id)}
       <input class="input grow" id="raLib" placeholder="Action décidée en réunion…" aria-label="Libellé de l'action">
@@ -210,10 +210,10 @@ function nouvelleReunion() {
   }
   const pl = calcPlanning(db, c.id);
   const ptPlanning = r.points.find(p => /planning/i.test(p.titre));
-  if (ptPlanning && pl.finProjetee) ptPlanning.texte = pl.retard ? `Fin projetée au ${fmtDate(pl.finProjetee)}, soit ${pl.retard} jour(s) ouvré(s) de retard sur la fin contractuelle du ${fmtDate(pl.finContrat)}.` : `Planning tenu : fin prévue le ${fmtDate(pl.finProjetee)}.`;
+  if (ptPlanning && pl.finProjetee) ptPlanning.texte = pl.retard ? `Fin projetée au ${fmtDate(pl.finProjetee)}, soit ${accord(pl.retard, 'jour(s) ouvré(s)')} de retard sur la fin contractuelle du ${fmtDate(pl.finContrat)}.` : `Planning tenu : fin prévue le ${fmtDate(pl.finProjetee)}.`;
   const resOuv = deCh(db.reserves).filter(x => x.statut !== 'levée');
   const ptQual = r.points.find(p => /qualit|réserve/i.test(p.titre));
-  if (ptQual && resOuv.length) ptQual.texte = `${resOuv.length} réserve(s) ouverte(s) : ` + resOuv.slice(0, 5).map(x => `${numeroReserve(x)} ${x.description}`).join(' ; ') + '.';
+  if (ptQual && resOuv.length) ptQual.texte = `${accord(resOuv.length, 'réserve(s) ouverte(s)')} : ` + resOuv.slice(0, 5).map(x => `${numeroReserve(x)} ${x.description}`).join(' ; ') + '.';
   db.reunions = db.reunions || [];
   db.reunions.push(r);
   return r;
@@ -366,7 +366,7 @@ Object.assign(ACT, {
     const deja = new Set(contactsDe(ui.chantierId).map(cle));
     const nv = contactsDe(val('anSrc')).filter(k => !deja.has(cle(k))).map(k => Object.assign({}, k, { id: uid(), chantierId: ui.chantierId, _m: undefined }));
     nv.forEach(k => delete k._m);
-    db.contacts.push(...nv); save(); fermerModal(); render(); toast(`${nv.length} intervenant(s) ajouté(s)`, 'succes');
+    db.contacts.push(...nv); save(); fermerModal(); render(); toast(`${accord(nv.length, 'intervenant(s) ajouté(s)')}`, 'succes');
   },
   reuNew: () => { const r = nouvelleReunion(); ui.reunionId = r.id; save(); render(); scrollTo(0, 0); },
   reuOuvrir: el => { ui.reunionId = el.dataset.id; render(); scrollTo(0, 0); },
@@ -374,7 +374,7 @@ Object.assign(ACT, {
   reuSuppr: async el => {
     const r = (db.reunions || []).find(x => x.id === el.dataset.id);
     const n = (db.actions || []).filter(a => (a.origine || {}).id === r.id).length;
-    if (!await confirmer(`Supprimer le CR n° ${r.numero}`, `Le compte rendu sera supprimé${n ? ` ; ses ${n} action(s) restent dans le plan d'actions` : ''}.`, { ok: 'Supprimer', danger: true })) return;
+    if (!await confirmer(`Supprimer le CR n° ${r.numero}`, `Le compte rendu sera supprimé${n ? ` ; ses ${accord(n, 'action(s)')} restent dans le plan d'actions` : ''}.`, { ok: 'Supprimer', danger: true })) return;
     db.reunions = db.reunions.filter(x => x !== r); ui.reunionId = null; save(); render();
   },
   reuAjoutPart: () => {

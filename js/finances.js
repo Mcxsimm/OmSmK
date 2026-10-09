@@ -77,7 +77,7 @@ function vSituations(c) {
   const sits = situationsDe(db, c.id);
   const postes = postesDe(db, c.id);
   const pf = parametresFinanciers(c);
-  const entete = enTetePage({ eyebrow: 'Gestion financière', titre: 'Situations mensuelles', sous: [sousInfo('receipt', `${sits.length} situation(s)`), sousInfo('briefcase', fmtE(postes.reduce((t, p) => t + num(p.montant), 0)) + ' HT')],
+  const entete = enTetePage({ eyebrow: 'Gestion financière', titre: 'Situations mensuelles', sous: [sousInfo('receipt', `${accord(sits.length, 'situation(s)')}`), sousInfo('briefcase', fmtE(postes.reduce((t, p) => t + num(p.montant), 0)) + ' HT')],
     actions: `<button class="btn primary" data-act="sitNew">${icone('file-plus')}Nouvelle situation</button>` });
   const seg = `<div class="seg" style="margin-bottom:16px">
     <button class="${onglet === 'situations' ? 'on' : ''}" data-act="sitOnglet" data-t="situations">${icone('receipt', 'sm')}Situations <span class="n">${sits.length}</span></button>
@@ -174,7 +174,7 @@ function vCommandes(c) {
   const budgetAchats = CATEGORIES_ACHAT.reduce((t, cat) => t + num((c.budget || {})[CLE_BUDGET[cat]]), 0);
   const aLivrer = toutes.filter(x => commandeEngagee(x) && !commandeLivree(x));
   const retard = toutes.filter(enRetard);
-  const entete = enTetePage({ eyebrow: 'Gestion financière', titre: 'Commandes & achats', sous: [sousInfo('shopping-cart', `${toutes.length} commande(s)`)],
+  const entete = enTetePage({ eyebrow: 'Gestion financière', titre: 'Commandes & achats', sous: [sousInfo('shopping-cart', `${accord(toutes.length, 'commande(s)')}`)],
     actions: `<button class="btn primary" data-act="cmdNew">${icone('plus')}Nouvelle commande</button>` });
   const kpis = `<div class="card mini-stats">
     <div><div class="ms-lbl">${icone('coins', 'sm')}Engagé HT</div><div class="ms-val">${fmtE(engage)}</div><div class="xs muted">${budgetAchats ? pc(engage / budgetAchats) + ' du budget achats' : 'budget achats non renseigné'}</div></div>
@@ -184,7 +184,7 @@ function vCommandes(c) {
   const tableau = `<div class="card"><div class="card-head"><div class="seg">${[['toutes', 'Toutes'], ['encours', 'En cours'], ['alivrer', 'À livrer'], ['livrees', 'Livrées']].map(([v, l]) => `<button class="${filtre === v ? 'on' : ''}" data-act="cmdFiltre" data-f="${v}">${l}</button>`).join('')}</div></div>
     ${liste.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>N°</th><th>Fournisseur</th><th>Objet</th><th>Catégorie</th><th class="num">Montant HT</th><th>Livraison</th><th>Statut</th><th></th></tr></thead><tbody>
       ${liste.map(x => `<tr class="row-link" data-act="cmdEdit" data-id="${esc(x.id)}">
-        <td class="strong nowrap">${esc(x.numero)}<div class="sub">${fmtDate(x.date)}</div></td><td>${esc(x.fournisseur)}</td><td>${esc(x.objet)}<div class="sub">${(x.lignes || []).length} ligne(s)</div></td>
+        <td class="strong nowrap">${esc(x.numero)}<div class="sub">${fmtDate(x.date)}</div></td><td>${esc(x.fournisseur)}</td><td>${esc(x.objet)}<div class="sub">${accord((x.lignes || []).length, 'ligne(s)')}</div></td>
         <td><span class="badge">${esc(x.categorie || 'Matériaux')}</span></td><td class="num strong">${fmtE2(montantCommande(x))}</td>
         <td class="nowrap">${x.livraisonReelle ? `<span class="pos">${icone('check', 'sm')} ${fmtDate(x.livraisonReelle)}</span>` : x.livraisonPrevue ? `<span class="${enRetard(x) ? 'neg' : ''}">${enRetard(x) ? icone('clock', 'sm') + ' ' : ''}${fmtDate(x.livraisonPrevue)}</span>` : '<span class="muted">—</span>'}</td>
         <td><span class="badge ${CLS_STATUT_CMD[x.statut] || ''} dot">${esc(libStatut(STATUTS_COMMANDE, x.statut))}</span></td>
@@ -357,7 +357,7 @@ Object.assign(ACT, {
         if (/\.(csv|txt)$/i.test(f.name)) rows = parseCSV(await f.text());
         else { const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }); rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' }); }
         const n = importerPostes(rows);
-        render(); toast(`${n} poste(s) importé(s)`, 'succes');
+        render(); toast(`${accord(n, 'poste(s) importé(s)')}`, 'succes');
       } catch (e) { toast('Import impossible : ' + (e.message || e), 'erreur'); }
     };
     inp.click();

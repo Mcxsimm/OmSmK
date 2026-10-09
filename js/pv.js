@@ -25,13 +25,13 @@ function vPVs(c) {
   const levees = deCh(db.reserves).filter(r => r.statut === 'levée');
   const actions = `<div class="row" style="gap:8px;margin-bottom:16px"><button class="btn primary" data-act="pvNew" data-t="reception">${icone('file-check')}PV de réception</button>
     <button class="btn" data-act="pvNew" data-t="levee" ${levees.length ? '' : 'disabled'}>${icone('shield-check')}PV de levée des réserves</button>
-    <span class="small muted">${ouvertes.length} réserve(s) ouverte(s) · ${levees.length} levée(s)</span></div>`;
+    <span class="small muted">${accord(ouvertes.length, 'réserve(s) ouverte(s)')} · ${accord(levees.length, 'levée(s)')}</span></div>`;
   if (!ps.length) return actions + `<div class="card">${vide('file-check', 'Aucun procès-verbal', 'Établissez le PV de réception avec le maître d\'ouvrage (avec ou sans réserves), puis le PV de levée des réserves. Signature à l\'écran, PDF immédiat.')}</div>`;
   return actions + `<div class="card">${ps.map(p => {
     const sig = signatairesPV(c).filter(x => (p.signatures || {})[x.cle]).length;
     return `<div class="res-item"><span class="kpi-ico" style="width:34px;height:34px">${icone(p.type === 'reception' ? 'file-check' : 'shield-check', 'sm')}</span>
       <div><div class="r-desc">${esc(TYPES_PV[p.type])}</div>
-        <div class="r-meta"><span>${icone('calendar', 'sm')}${fmtDate(p.date, true)}</span>${p.type === 'reception' ? `<span class="badge ${p.decision === 'sans' ? 'pos' : p.decision === 'avec' ? 'warn' : 'neg'}">${esc((DECISIONS_PV.find(d => d[0] === p.decision) || ['', ''])[1])}</span>` : ''}<span>${(p.reserves || []).length} réserve(s)</span><span class="badge ${sig === 3 ? 'pos' : ''}">${sig}/3 signature(s)</span></div></div>
+        <div class="r-meta"><span>${icone('calendar', 'sm')}${fmtDate(p.date, true)}</span>${p.type === 'reception' ? `<span class="badge ${p.decision === 'sans' ? 'pos' : p.decision === 'avec' ? 'warn' : 'neg'}">${esc((DECISIONS_PV.find(d => d[0] === p.decision) || ['', ''])[1])}</span>` : ''}<span>${accord((p.reserves || []).length, 'réserve(s)')}</span><span class="badge ${sig === 3 ? 'pos' : ''}">${sig}/3 signature(s)</span></div></div>
       <div class="row" style="flex-wrap:nowrap"><button class="btn sm ${sig === 3 ? '' : 'primary'}" data-act="pvSigner" data-id="${esc(p.id)}">${icone('pencil', 'sm')}Signer</button><button class="btn sm" data-act="pvPDF" data-id="${esc(p.id)}">${icone('file-text', 'sm')}PDF</button>
         <button class="btn ghost icon sm" data-act="pvEdit" data-id="${esc(p.id)}" aria-label="Modifier">${icone('pencil', 'sm')}</button><button class="btn ghost icon sm" data-act="pvSuppr" data-id="${esc(p.id)}" aria-label="Supprimer">${icone('trash-2', 'sm')}</button></div></div>`;
   }).join('')}</div>`;

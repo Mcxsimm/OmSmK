@@ -120,7 +120,7 @@ function compteurs() {
     n.planning = calcPlanning(db, c.id, auj).rows.filter(r => r.statut === 'retard').length;
     n.devis = devisARelancer(db, c.id, auj).length + situationsImpayees(db, c.id, auj).length;
     n.documents = documentsEnAttente(db, c.id, auj).length;
-    n.preparation = etatPreparation(db, c.id, REF.preparation, auj).retard.length;
+    n.preparation = etatPreparation(db, c.id, preparationPour(c), auj).retard.length;
   }
   n.journee = actionsDe(db).filter(a => actionEnRetard(a, auj) && db.chantiers.some(x => x.id === a.chantierId)).length;
   n.portefeuille = 0;
@@ -158,6 +158,7 @@ function renderSyncPill() {
     else if (Synchro.etat === 'encours') { etat = 'encours'; lbl = 'Synchronisation…'; titre = lbl; }
     else if (Synchro.etat === 'erreur') { etat = 'erreur'; lbl = 'Erreur'; titre = 'Erreur de synchronisation : ' + Synchro.erreur; }
     else { etat = 'ok'; lbl = 'Synchronisé'; titre = 'Synchronisé' + (Synchro.derniere ? ' à ' + Synchro.derniere.toLocaleTimeString('fr-FR') : ''); }
+    if (Drive.connecte()) titre += Drive.etat === 'ok' ? ' · copie sur Google Drive à jour' : ' · Google Drive : ' + (Drive.etat === 'reconnexion' ? 'reconnexion nécessaire (Paramètres)' : Drive.erreur || Drive.etat);
   } else if (Drive.connecte()) {
     if (!navigator.onLine) { etat = 'horsligne'; lbl = 'Hors-ligne'; titre = 'Hors-ligne : les saisies seront envoyées sur Google Drive au retour du réseau'; }
     else if (Drive.etat === 'encours') { etat = 'encours'; lbl = 'Drive…'; titre = 'Enregistrement sur Google Drive'; }
@@ -252,7 +253,7 @@ function alertes(c, s) {
   if (dvr.length) out.push({ sev: 'warning', ic: 'file-plus', t: `${dvr.length} devis à relancer`, d: dvr.slice(0, 3).map(d => `${esc(d.numero)} — ${esc(d.objet || '')}`).join(' · '), go: 'devis' });
   const docA = documentsEnAttente(db, c.id, auj);
   if (docA.length) out.push({ sev: 'warning', ic: 'folder-open', t: `${accord(docA.length, 'document(s)')} en attente de visa depuis plus de 15 jours`, d: docA.slice(0, 3).map(d => esc(d.reference || d.titre)).join(' · '), go: 'documents' });
-  const prepR = etatPreparation(db, c.id, REF.preparation, auj).retard;
+  const prepR = etatPreparation(db, c.id, preparationPour(c), auj).retard;
   if (prepR.length) out.push({ sev: 'warning', ic: 'list-checks', t: `${accord(prepR.length, 'étape(s)')} de préparation en retard`, d: prepR.slice(0, 2).map(i => esc(i.texte)).join(' · '), go: 'preparation' });
   out.push(...alertesCharge(c));
   const semCourante = lundi(auj);
@@ -670,7 +671,7 @@ function vPortefeuille() {
     totB += s.tot.budget; totH += s.tot.heures; totI += s.tot.impact; totIP += s.tot.impactProj;
     const eq = c.equipeId ? Synchro.equipes.find(e => e.id === c.equipeId) : null;
     return `<div class="card projet ${c.id === ui.chantierId ? 'actif' : ''}" data-act="chantierOuvrir" data-id="${esc(c.id)}">
-      <div class="projet-head"><span class="projet-ico">${icone(c.metier === 'Façade' ? 'layers' : 'building-2')}</span>
+      <div class="projet-head"><span class="projet-ico">${icone(iconeMetier(c))}</span>
         <div class="grow"><h3>${esc(c.nom)}</h3><div class="small muted">${esc([c.client, c.metier].filter(Boolean).join(' · ') || '—')}</div></div>
         <span class="badge ${st.cls} dot">${st.txt}</span></div>
       <div><div class="row small" style="justify-content:space-between;margin-bottom:6px"><span class="muted">Avancement</span><b>${pc(s.tot.pct)}</b></div>${barre(s.tot.pct, s.tot.pct >= 1 ? 'pos' : '')}</div>
@@ -698,7 +699,7 @@ function vPortefeuille() {
 /* =============================== Paramètres ============================== */
 function vParametres() {
   const t = ui.paramTab;
-  const nav = [['pages', 'layout-dashboard', 'Mes pages'], ['drive', 'cloud', 'Google Drive'], ['equipe', 'users', 'Travail en équipe'], ['entreprise', 'landmark', 'Entreprise'], ['donnees', 'database', 'Données'], ['profil', 'user', 'Profil'], ['rappels', 'calendar-range', 'Rappels & agenda'], ['apparence', 'sun', 'Apparence'], ['apropos', 'info', 'À propos']];
+  const nav = [['pages', 'layout-dashboard', 'Mes pages'], ['drive', 'cloud', 'Drive & sauvegardes'], ['equipe', 'users', 'Travail en équipe'], ['entreprise', 'landmark', 'Entreprise'], ['donnees', 'database', 'Données'], ['profil', 'user', 'Profil'], ['rappels', 'calendar-range', 'Rappels & agenda'], ['apparence', 'sun', 'Apparence'], ['apropos', 'info', 'À propos']];
   let corps = '';
   if (t === 'pages') corps = vMesPages();
   if (t === 'drive') corps = vDrive();
@@ -773,7 +774,7 @@ function modalChantier(c) {
     <div class="form-section">Identification</div>
     ${champ('chNom', 'Nom du chantier *', e.nom, 'text', 'placeholder="ex : Résidence Les Tilleuls — Bât. A"')}
     <div class="form-grid">${champ('chClient', 'Client / maître d\'ouvrage', e.client)}${champ('chAdresse', 'Adresse', e.adresse)}
-      ${selectHTML('chMetier', 'Métier', ['Étanchéité', 'Façade', 'Autre'], e.metier)}${selectHTML('chSupport', 'Support', ['Béton', 'Acier', 'Bois', 'Parpaing', 'Autre'], e.support)}
+      ${selectHTML('chMetier', 'Métier', ['Étanchéité', 'Façade', 'Rénovation', 'Autre'], e.metier)}${selectHTML('chSupport', 'Support', ['Béton', 'Acier', 'Bois', 'Parpaing', 'Autre'], e.support)}
       ${champ('chOtp', 'Code OTP (SAP)', e.otp, 'text', 'placeholder="ex : 6009435"')}${champ('chImput', 'N° d\'imputation', e.imputation)}${champ('chAgence', 'Agence', e.agence)}</div>
     <p class="small muted">Le code OTP relie le chantier au pointage, aux commandes, à la facturation et aux coûts réels SAP (RAF projet).</p>
     <div class="form-section">Équipe et planning</div>
@@ -784,6 +785,8 @@ function modalChantier(c) {
       ${champ('chTaux', 'Taux horaire équipe (€/h)', e.tauxHoraire, 'number', 'step="0.5"')}${champ('chHj', 'Heures par journée', e.heuresJour, 'number', 'step="0.25"')}</div>`,
     `<button class="btn" data-act="fermerModal">Annuler</button><button class="btn primary" data-act="saveChantier">${c ? 'Enregistrer' : 'Créer le chantier'}</button>`, { icone: 'building-2' });
 }
+
+const iconeMetier = c => ({ 'Façade': 'layers', 'Rénovation': 'house' })[c.metier] || 'building-2';
 
 function phasesPour(c) {
   const std = Object.keys(REF.metiers[c.metier] || REF.metiers['Étanchéité']);
@@ -813,6 +816,7 @@ function modalBiblio() {
   const c = ch();
   const ouvrages = [...new Set(deCh(db.ops).map(o => o.ouvrage))];
   ouvrirModal('Cadences standard', `
+    ${c.metier === 'Rénovation' ? `<div class="alert warn" style="margin-bottom:12px">${icone('triangle-alert')}<div>Pas de cadences standard pour la rénovation : dans le BTE, saisissez pour chaque opération votre propre cadence ou des heures au forfait. Les cadences ci-dessous concernent l'étanchéité et la façade.</div></div>` : ''}
     <div class="alert info" style="margin-bottom:16px">${icone('info')}<div>Cadences des simulateurs SMAC (journée de ${hjDe(c)} h). Le <b>coefficient chantier</b> pondère la cadence selon la surface, les émergences, la coactivité, la hauteur ou les exigences : 1,10 = 10 % plus lent.</div></div>
     <datalist id="dlOuvB">${ouvrages.map(o => `<option value="${esc(o)}">`).join('')}</datalist>
     <div class="form-grid">${champ('biOuvrage', 'Ajouter dans l\'ouvrage', ouvrages[0] || 'Ouvrage 1', 'text', 'list="dlOuvB"')}${champ('biMetre', 'Métré', '', 'number', 'step="any"')}
@@ -947,7 +951,7 @@ function renderPopChantiers() {
   if (!box) return;
   box.innerHTML = db.chantiers.filter(c => !q || norm(c.nom + ' ' + (c.client || '')).includes(q)).map(c => {
     const st = statutChantier(c);
-    return `<button class="pop-item ${c.id === ui.chantierId ? 'on' : ''}" data-act="chantierOuvrir" data-id="${esc(c.id)}">${icone(c.metier === 'Façade' ? 'layers' : 'building-2')}
+    return `<button class="pop-item ${c.id === ui.chantierId ? 'on' : ''}" data-act="chantierOuvrir" data-id="${esc(c.id)}">${icone(iconeMetier(c))}
       <span class="pi-txt"><span class="pi-nom">${esc(c.nom)}</span><span class="pi-sub">${esc(c.client || '—')} · ${st.txt}</span></span>${c.id === ui.chantierId ? icone('check', 'sm') : ''}</button>`;
   }).join('') || '<div class="small muted" style="padding:10px">Aucun chantier</div>';
 }

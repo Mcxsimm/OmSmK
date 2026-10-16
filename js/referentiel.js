@@ -32,6 +32,23 @@ const REFERENTIEL = {
       "Finitions": ["Couvertines"],
       "Contre-bardage": ["Contre-bardage"],
       "Réserves": ["Levée de réserves"]
+    },
+    // Rénovation (maîtrise d'œuvre, tous corps d'état) : une phase par lot. Pas de cadences standard :
+    // la cadence ou les heures au forfait sont saisies par opération.
+    "Rénovation": {
+      "Installation / Appro": ["Installation de chantier", "Protection des existants", "Repli et nettoyage"],
+      "Démolition / curage": ["Curage", "Démolition de cloisons", "Dépose de revêtements", "Évacuation des gravats"],
+      "Gros œuvre / maçonnerie": ["Ouverture de mur porteur", "Reprise en sous-œuvre", "Maçonnerie", "Chape / dalle"],
+      "Charpente / couverture": ["Charpente", "Couverture", "Zinguerie", "Fenêtres de toit"],
+      "Menuiseries extérieures": ["Fenêtres", "Portes extérieures", "Volets"],
+      "Isolation / plâtrerie": ["Isolation des murs", "Isolation des combles", "Cloisons", "Doublages", "Faux plafonds", "Bandes et enduits"],
+      "Plomberie / chauffage / ventilation": ["Réseaux d'eau et d'évacuation", "Sanitaires", "Chauffage", "Ventilation (VMC)"],
+      "Électricité": ["Tableau électrique", "Réseaux et appareillage", "Éclairage", "Courants faibles"],
+      "Menuiseries intérieures": ["Portes intérieures", "Placards / agencement", "Cuisine", "Escalier"],
+      "Revêtements de sols et murs": ["Carrelage", "Faïence", "Parquet", "Sols souples"],
+      "Peinture / finitions": ["Préparation des supports", "Peinture", "Finitions"],
+      "Extérieurs": ["Ravalement / enduits", "Terrasse", "Aménagements extérieurs"],
+      "Réserves": ["Levée de réserves"]
     }
   },
 
@@ -283,6 +300,38 @@ const REFERENTIEL = {
       "Échafaudages et protections collectives commandés",
       "Commandes des matériaux à délai long passées",
       "Bennes, sanitaires et base vie organisés"
+    ]}
+  ],
+  // Préparation d'un chantier de rénovation suivi en maîtrise d'œuvre (client particulier)
+  preparationRenovation: [
+    { section: "Programme et autorisations", items: [
+      "Programme et budget validés avec le maître d'ouvrage",
+      "Contrat de maîtrise d'œuvre signé",
+      "Relevé de l'existant et diagnostics avant travaux (amiante, plomb, structure si besoin)",
+      "Autorisation d'urbanisme obtenue (déclaration préalable ou permis) et affichée sur le terrain",
+      "Délai de recours des tiers écoulé",
+      "Copropriété : accord du syndic ou de l'assemblée générale si parties communes"
+    ]},
+    { section: "Consultation et marchés", items: [
+      "Dossier de consultation des entreprises établi",
+      "Devis des entreprises comparés et lots attribués",
+      "Devis ou marchés signés par le maître d'ouvrage",
+      "Attestations d'assurance (décennale, responsabilité civile) des entreprises reçues",
+      "Assurance dommages-ouvrage souscrite ou décision écrite du maître d'ouvrage"
+    ]},
+    { section: "Lancement", items: [
+      "Planning des travaux par lot établi et validé",
+      "Ordre de service de démarrage transmis aux entreprises",
+      "Réunion de lancement sur site avec les entreprises",
+      "Plan d'installation de chantier (accès, stockage, bennes, sanitaires)",
+      "Voisinage informé ; occupation de voirie demandée si nécessaire",
+      "DICT / DT déposées si travaux à proximité de réseaux",
+      "Coordination sécurité (SPS) organisée si plusieurs entreprises interviennent"
+    ]},
+    { section: "Choix et approvisionnements", items: [
+      "Choix des matériaux et finitions validés par le client",
+      "Échantillons et coloris validés",
+      "Commandes à délai long passées (menuiseries, cuisine, carrelage…)"
     ]}
   ],
   typesDocuments: ["Plan d'exécution", "Carnet de détails", "Note de calcul", "Fiche technique", "Avis technique", "PV d'essai", "Échantillon", "Notice d'entretien", "Garantie / attestation", "Autre"],

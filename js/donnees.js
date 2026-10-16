@@ -20,6 +20,8 @@ async function importerFichier(file) {
     if (nom.endsWith('.json')) {
       const d = JSON.parse(await file.text());
       if (!d || !Array.isArray(d.chantiers)) throw new Error('Fichier de sauvegarde invalide');
+      // Copie de nuit du serveur : on ne garde que les données de l'application
+      delete d.sauvegardeServeur; delete d.enregistrementsNonClasses;
       if (!await confirmer('Restaurer la sauvegarde', `La sauvegarde contient ${accord(d.chantiers.length, 'chantier(s)')}. Elle <b>remplacera</b> les données de cet appareil.`, { ok: 'Restaurer', danger: true })) return;
       Synchro.oublierEtat();
       db = Object.assign(dbVide(), d); ui.chantierId = null; save(); fermerModal(); render(); toast('Sauvegarde restaurée', 'succes');
@@ -727,7 +729,7 @@ function vDrive() {
       <div class="row" style="gap:14px;align-items:flex-start"><span class="kpi-ico" style="width:44px;height:44px">${icone('cloud', 'lg')}</span>
         <div class="grow"><h3>Enregistrer mes données sur Google Drive</h3>
           <p class="muted" style="margin-top:4px">Vos chantiers sont enregistrés dans le dossier <b>OmSmK</b> de votre Google Drive, avec une copie par jour conservée 30 jours.
-            Le PC et le téléphone connectés au même compte Google retrouvent les mêmes données. Hors-ligne, l'application continue de fonctionner et envoie les saisies au retour du réseau.
+            Le PC et le téléphone connectés au même compte Google retrouvent les mêmes données. Cet enregistrement fonctionne en plus du travail en équipe (Supabase) : c'est une seconde copie, dans votre propre stockage. Hors-ligne, l'application continue de fonctionner et envoie les saisies au retour du réseau.
             OmSmK n'a accès qu'aux fichiers qu'il a lui-même créés dans votre Drive.</p>
           ${id ? `<button class="btn primary" style="margin-top:14px" data-act="driveConnecter">${icone('cloud')}Connecter Google Drive</button>` : ''}</div></div></div>
       <div class="sep"></div>
@@ -740,7 +742,7 @@ function vDrive() {
           <li>Copiez l'<b>ID client</b> (se termine par <code>.apps.googleusercontent.com</code>) et collez-le ci-dessous.</li></ol>`}
         <div class="row" style="flex-wrap:nowrap"><input class="input" id="drvClient" value="${esc(id)}" placeholder="xxxxxxxx.apps.googleusercontent.com" aria-label="Identifiant client Google">
           <button class="btn ${id ? '' : 'primary'}" data-act="driveClientId">${icone('check')}Enregistrer</button></div>
-        <p class="small muted" style="margin-top:8px">Adresse de l'application à autoriser : <code>${esc(origine)}</code></p></div></div>`;
+        <p class="small muted" style="margin-top:8px">Adresse de l'application à autoriser : <code>${esc(origine)}</code></p></div></div>` + carteSauvegardeServeur();
   }
   const etat = { ok: ['pos', 'Enregistré'], encours: ['info', 'Synchronisation…'], erreur: ['neg', 'Erreur'], reconnexion: ['warn', 'Reconnexion nécessaire'], off: ['', 'Déconnecté'] }[Drive.etat] || ['', Drive.etat];
   const dossier = Drive._cfg.dossierId;
@@ -753,7 +755,38 @@ function vDrive() {
       <div class="set-row"><div class="s-txt"><b>Dossier OmSmK</b><span>Fichier <code>${DRIVE_FICHIER}</code> et sous-dossier <i>Sauvegardes</i> (une copie par jour, 30 jours).</span></div>${dossier ? `<a class="btn" href="https://drive.google.com/drive/folders/${esc(dossier)}" target="_blank" rel="noopener">${icone('external-link')}Ouvrir</a>` : ''}</div>
       <div class="set-row"><div class="s-txt"><b>Revenir à une copie datée</b><span>Remplace les données par celles d'un jour précédent ; la version actuelle reste dans les copies.</span></div><button class="btn" data-act="driveCopies">${icone('undo-2')}Choisir une copie</button></div>
       <div class="set-row"><div class="s-txt"><b>Déconnecter</b><span>Les données restent sur l'appareil et sur votre Drive.</span></div><button class="btn ghost" data-act="driveDeconnecter">${icone('log-out')}Déconnecter</button></div>
-      <div class="set-row"><div class="s-txt"><b>Stockage sur l'appareil</b><span id="drvStock">…</span></div></div></div>`;
+      <div class="set-row"><div class="s-txt"><b>Stockage sur l'appareil</b><span id="drvStock">…</span></div></div></div>` + carteSauvegardeServeur();
+}
+
+/* Sauvegarde automatique de nuit : le serveur copie les données des équipes et leurs photos
+   sur le Google Drive de l'entreprise (supabase/functions/sauvegarde-drive). */
+function carteSauvegardeServeur() {
+  setTimeout(afficherSauvegardeServeur, 0);
+  return `<div class="card" style="margin-top:16px"><div class="card-head"><h3>${icone('shield-check')}Sauvegarde automatique de nuit</h3></div>
+    <div class="card-body"><p class="small muted">Chaque nuit, le serveur dépose sur le Google Drive de l'entreprise une copie complète des chantiers partagés en équipe (fichier restaurable par Paramètres → Données → Restaurer une sauvegarde) et les nouvelles photos.
+      Elle s'ajoute à Supabase et à l'enregistrement Drive de cet appareil, sans rien demander aux utilisateurs.</p>
+      <div id="sauvServeur" class="small" style="margin-top:10px">…</div></div></div>`;
+}
+function texteSauvegardeServeur(etat) {
+  const d = etat && etat.derniere;
+  if (!d) return { classe: 'warn', libelle: 'Aucune sauvegarde pour l\'instant', detail: 'La première aura lieu la nuit prochaine, une fois Google Drive configuré sur le serveur.' };
+  const quand = new Date(d.fin || d.debut).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+  if (d.statut === 'ok') return { classe: 'pos', libelle: 'Réussie', detail: `${quand} · ${accord(d.enregistrements, 'enregistrement(s)')} · ${accord(d.photos, 'photo(s) copiée(s)')}` };
+  if (d.statut === 'partielle') return { classe: 'warn', libelle: 'Partielle', detail: `${quand} · ${d.message || ''}` };
+  if (d.statut === 'en_cours') return { classe: 'info', libelle: 'En cours', detail: quand };
+  const reussie = etat.derniere_reussie ? ` Dernière réussie : ${new Date(etat.derniere_reussie).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}.` : ' Aucune sauvegarde réussie à ce jour.';
+  return { classe: 'neg', libelle: 'Échec', detail: `${quand} · ${d.message || 'erreur inconnue'}.${reussie}` };
+}
+async function afficherSauvegardeServeur() {
+  const z = $('#sauvServeur');
+  if (!z) return;
+  if (!Synchro.disponible() || !Synchro.connecte()) { z.textContent = 'État visible une fois connecté au travail en équipe (Paramètres → Travail en équipe).'; return; }
+  const { data, error } = await Synchro.client.rpc('omsmk_etat_sauvegarde');
+  if (!$('#sauvServeur')) return;
+  if (error) { z.textContent = 'État indisponible : ' + error.message; return; }
+  if (data === null) { z.textContent = 'État visible par les membres d\'une équipe.'; return; }
+  const t = texteSauvegardeServeur(data);
+  z.innerHTML = `<span class="badge ${t.classe} dot">${esc(t.libelle)}</span> <span class="muted">${esc(t.detail)}</span>`;
 }
 async function afficherStockage() {
   const z = $('#drvStock');

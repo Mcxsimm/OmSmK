@@ -15,11 +15,13 @@ const documentsDe = cid => (db.documents || []).filter(d => d.chantierId === cid
 const derniersIndices = cid => { const vus = new Set(); return documentsDe(cid).filter(d => { const k = (d.reference || d.titre || d.id); if (vus.has(k)) return false; vus.add(k); return true; }); };
 
 /* ------------------------------ Préparation ------------------------------ */
+// Étapes de préparation selon le métier du chantier (rénovation suivie en maîtrise d'œuvre, ou SMAC)
+const preparationPour = c => (c && c.metier === 'Rénovation' ? REF.preparationRenovation : REF.preparation);
 function vPreparation(c) {
-  const e = etatPreparation(db, c.id, REF.preparation);
+  const e = etatPreparation(db, c.id, preparationPour(c));
   const entete = enTetePage({ eyebrow: 'Chantier', titre: 'Préparation de chantier', sous: [sousInfo('list-checks', `${e.faits} / ${e.total} étapes`), e.retard.length ? `<span class="badge neg">${e.retard.length} en retard</span>` : ''] });
   const resp = datalistResponsables(c.id);
-  const sections = REF.preparation.map((sec, si) => {
+  const sections = preparationPour(c).map((sec, si) => {
     const items = e.items.filter(i => i.cle.startsWith(si + '-'));
     const n = items.filter(i => i.statut === 'fait').length, tot = items.filter(i => i.statut !== 'so').length;
     return `<div class="card"><div class="card-head"><h3>${esc(sec.section)}</h3><span class="hint">${n} / ${tot}</span></div>
@@ -52,7 +54,7 @@ function majPrep(cle, champs) {
 
 function modalPrepDetail(cle) {
   const c = ch();
-  const it = etatPreparation(db, c.id, REF.preparation).items.find(i => i.cle === cle);
+  const it = etatPreparation(db, c.id, preparationPour(c)).items.find(i => i.cle === cle);
   ouvrirModal('Étape de préparation', `<p class="strong" style="margin-bottom:14px">${esc(it.texte)}</p>${datalistResponsables(c.id)}
     <input type="hidden" id="ppK" value="${cle}">
     <div class="form-grid">${champ('ppResp', 'Responsable', it.responsable, 'text', 'list="dlResp"')}${champ('ppEch', 'Échéance', it.echeance, 'date')}</div>
@@ -132,7 +134,7 @@ Object.assign(ACT, {
     const cle = val('ppK');
     majPrep(cle, { responsable: val('ppResp'), echeance: val('ppEch'), note: val('ppNote') });
     if ($('#ppAction').checked) {
-      const it = etatPreparation(db, ui.chantierId, REF.preparation).items.find(i => i.cle === cle);
+      const it = etatPreparation(db, ui.chantierId, preparationPour(ch())).items.find(i => i.cle === cle);
       creerAction({ libelle: `Préparation — ${it.texte}`, responsable: val('ppResp'), echeance: val('ppEch') || addDays(aujourdHui(), 7) });
       save();
     }

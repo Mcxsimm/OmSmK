@@ -3,6 +3,7 @@ Le logiciel de suivi de chantier - pour les pros - dédiés à l'excellence opé
 
 Application web (PWA) de pilotage de gros chantiers d'**étanchéité** et de **façade**, construite sur la méthode
 Excellence Opérationnelle SMAC : BTE standard, cadences cibles, suivi hebdomadaire par phase, check-list du conducteur de travaux.
+Elle suit aussi les chantiers de **rénovation** en maîtrise d'œuvre (métier « Rénovation » : une phase par lot tous corps d'état et une préparation dédiée, de l'autorisation d'urbanisme à l'ordre de service). C'est l'outil de conduite de travaux des salariés de Ligne&Bati.
 Elle fonctionne **hors-ligne** sur smartphone, tablette ou PC, sans serveur ni compte.
 
 ## Interface
@@ -93,6 +94,32 @@ Réglage à faire une fois (console Google Cloud, gratuit) :
 
 La session Google dure une heure : au-delà, la pastille affiche « Reconnecter Drive » et un clic suffit ; les saisies faites entre-temps restent sur l'appareil et partent à la reconnexion.
 
+### Sauvegarde automatique de nuit sur Google Drive (serveur)
+En plus de Supabase et de l'enregistrement Drive de chaque appareil, le serveur fait **chaque nuit à 2 h 30 UTC** une copie complète vers le Google Drive de l'entreprise, sans que personne n'ait besoin d'ouvrir l'application :
+- dossier **« OmSmK — Sauvegardes automatiques »** : `omsmk_serveur_AAAA-MM-JJ.json`, toutes les données des chantiers partagés en équipe. On garde les 30 derniers jours, puis la première copie de chaque mois pendant 12 mois. Le fichier se restaure dans l'application : Paramètres → Données → Restaurer une sauvegarde ;
+- sous-dossier **Photos / équipe / chantier** : copie incrémentale des photos (150 au plus par nuit, le reste les nuits suivantes). Une photo supprimée dans l'application reste sur le Drive.
+
+L'état de la dernière sauvegarde s'affiche dans Paramètres → Drive & sauvegardes (membres d'une équipe).
+Fonctionnement : traitement planifié `pg_cron` → fonction `supabase/functions/sauvegarde-drive` (clé d'appel générée dans la base, jamais publiée) ; journal dans `omsmk_priv.sauvegarde_journal`. Schéma : `supabase/migrations/20261016090000_omsmk_sauvegarde_drive.sql`.
+
+**Réglage à faire une fois** (compte Google de l'entreprise, gratuit) :
+1. Dans le projet Google Cloud (celui de l'ID client OmSmK, avec **Google Drive API** activée) : **Écran de consentement OAuth → Audience → Publier l'application** (« En production »). Sans cela, l'autorisation expire au bout de 7 jours. L'autorisation `drive.file` ne demande pas de validation par Google.
+2. **Identifiants → Créer des identifiants → ID client OAuth**, type *Application Web*, nom « OmSmK serveur », URI de redirection autorisé : `https://developers.google.com/oauthplayground`. Notez l'**ID client** et le **code secret du client**.
+3. Ouvrez [OAuth 2.0 Playground](https://developers.google.com/oauthplayground), roue dentée → cochez **Use your own OAuth credentials** → collez l'ID et le secret. À gauche, saisissez la portée `https://www.googleapis.com/auth/drive.file` → **Authorize APIs** → connectez-vous avec le compte Google de l'entreprise → **Exchange authorization code for tokens** → copiez le **Refresh token**.
+4. Tableau de bord Supabase → **Edge Functions → Secrets** : ajoutez `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN` (facultatif : `GOOGLE_DRIVE_DOSSIER`, identifiant d'un dossier Drive où ranger les sauvegardes).
+5. Pour tester sans attendre la nuit, dans **SQL Editor** :
+   ```sql
+   select net.http_post(
+     url := 'https://pykyvpxxwsegxbqhvxvu.supabase.co/functions/v1/sauvegarde-drive',
+     headers := jsonb_build_object('Content-Type', 'application/json',
+       'x-sauvegarde-cle', (select cle from omsmk_priv.sauvegarde_config where id = 1)),
+     body := '{}'::jsonb);
+   -- puis, quelques secondes plus tard :
+   select debut, fin, statut, enregistrements, photos, message from omsmk_priv.sauvegarde_journal order by debut desc limit 5;
+   ```
+
+Ne mettez jamais ces secrets dans le dépôt : ils restent dans Supabase.
+
 ### Travail en équipe (Supabase)
 
 La **synchronisation en ligne** (onglet ⚙️ Chantiers & données → ☁️ Synchronisation en ligne) permet de travailler à plusieurs :
@@ -115,7 +142,7 @@ Les photos sont conservées dans IndexedDB sur l'appareil ; celles des chantiers
 deno lint
 deno test -A
 ```
-Les tests vérifient les calculs (contrôlés sur le BTE du cas CIGV), l'import CSV et la logique de synchronisation (conflits, suppressions, hors-ligne).
+Les tests vérifient les calculs (contrôlés sur le BTE du cas CIGV), l'import CSV, la logique de synchronisation (conflits, suppressions, hors-ligne) et celle de la sauvegarde de nuit (reconstruction de la base, rotation des copies).
 
 ## Structure
 ```
@@ -125,6 +152,7 @@ js/referentiel.js     Référentiel métier : phases, opérations, cadences, che
 js/calculs.js         Calculs métier purs (BTE, suivi, terrain, CSV)
 js/synchro.js         Synchronisation en ligne (Supabase)
 js/drive.js           Stockage local IndexedDB et enregistrement sur Google Drive (fusion PC / téléphone, copies datées)
+supabase/functions/sauvegarde-drive/  Sauvegarde automatique de nuit vers le Google Drive de l'entreprise
 js/config.js          Adresse et clé publique du projet Supabase
 js/ui.js              Briques d'interface : formats, icônes, notifications, boîtes de dialogue
 js/graphiques.js      Graphiques SVG (courbe d'avancement, écarts par phase)
